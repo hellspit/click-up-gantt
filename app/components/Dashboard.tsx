@@ -1,8 +1,9 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
 import { getVisibleRows } from '../utils/taskGrouper';
+import { dateToPx } from '../utils/dateUtils';
 import TaskTree from './TaskTree';
 import GanttChart from './GanttChart';
 import SkeletonLoader from './SkeletonLoader';
@@ -23,6 +24,31 @@ export default function Dashboard() {
     if (treeRef.current) treeRef.current.scrollTop = ganttBodyRef.current.scrollTop;
     if (ganttHeaderRef.current) ganttHeaderRef.current.scrollLeft = ganttBodyRef.current.scrollLeft;
   }, []);
+
+  // Auto-scroll to TODAY line when tasks load
+  useEffect(() => {
+    if (!timelineConfig || tasks.length === 0) return;
+
+    // Small delay to let the SVG render first
+    const timer = setTimeout(() => {
+      if (!ganttBodyRef.current) return;
+
+      const today = new Date();
+      const todayPx = dateToPx(today, timelineConfig.startDate, timelineConfig.pxPerDay);
+      const containerWidth = ganttBodyRef.current.clientWidth;
+
+      // Scroll so TODAY is about 1/3 from the left edge
+      const scrollTarget = Math.max(0, todayPx - containerWidth * 0.33);
+      ganttBodyRef.current.scrollLeft = scrollTarget;
+
+      // Sync the header
+      if (ganttHeaderRef.current) {
+        ganttHeaderRef.current.scrollLeft = scrollTarget;
+      }
+    }, 100);
+
+    return () => clearTimeout(timer);
+  }, [tasks, timelineConfig]);
 
   if (loading) {
     return <SkeletonLoader progress={loadingProgress} />;
