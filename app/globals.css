@@ -117,3 +117,83 @@ html, body { height: 100%; background: var(--bg-primary); color: var(--text-prim
 .empty-state-icon { font-size: 48px; opacity: 0.3; }
 .empty-state-text { font-size: 15px; font-weight: 500; }
 .empty-state-sub { font-size: 12px; color: var(--text-muted); }
+
+/* ===== MOBILE RESPONSIVE ===== */
+@media (max-width: 768px) {
+  html, body { overflow: auto; }
+
+  /* Header: stack vertically */
+  .app-header {
+    flex-wrap: wrap;
+    gap: 10px;
+    padding: 10px 12px;
+  }
+  .header-input { min-width: 0; width: 100%; }
+  .header-input-group { flex: 1; min-width: 180px; }
+  .header-spacer { display: none; }
+  .btn-generate { flex: 1; min-width: 100px; }
+  .btn-export { flex: 1; min-width: 100px; }
+
+  /* Summary: wrap legend */
+  .summary-bar {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding: 6px 12px;
+  }
+  .legend { flex-wrap: wrap; gap: 8px; margin-left: 0; }
+
+  /* Dashboard: single column stacked layout */
+  .dashboard {
+    display: flex;
+    flex-direction: column;
+    overflow: auto;
+  }
+  .dashboard-corner {
+    border-right: none;
+    border-bottom: 1px solid var(--border-primary);
+    padding: 8px 12px;
+    font-size: 12px;
+  }
+  .gantt-header-wrap {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .task-tree-wrap {
+    border-right: none;
+    border-bottom: 1px solid var(--border-primary);
+    overflow-y: auto;
+    max-height: 40vh;
+  }
+  .gantt-body-wrap {
+    overflow: auto;
+    -webkit-overflow-scrolling: touch;
+    min-height: 300px;
+  }
+
+  /* Tree: tighter spacing */
+  .tree-row { padding: 0 6px 0 0; }
+  .tree-task-name { font-size: 11px; }
+  .tree-group-name { font-size: 11px; }
+
+  /* No-date section */
+  .no-date-section { padding: 10px 12px; }
+  .no-date-list { gap: 4px; }
+  .no-date-chip { font-size: 10px; padding: 3px 8px; }
+
+  /* Empty state */
+  .empty-state { padding: 40px 20px; }
+  .empty-state-icon { font-size: 36px; }
+  .empty-state-text { font-size: 13px; }
+}
+
+/* Small phones */
+@media (max-width: 480px) {
+  .app-header { padding: 8px 8px; gap: 8px; }
+  .header-input-group { min-width: 100%; }
+  .btn-generate, .btn-export { width: 100%; }
+  .summary-text { font-size: 10px; }
+  .legend-item { font-size: 9px; }
+  .legend-dot { width: 6px; height: 6px; }
+  .dashboard-corner { font-size: 10px; }
+  .tree-task-name { font-size: 10px; }
+}
