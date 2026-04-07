@@ -6,6 +6,13 @@ export interface ClickUpMember {
   profilePicture: string | null;
 }
 
+export interface CustomField {
+  id: string;
+  name: string;
+  type: string;
+  value: any;
+}
+
 export interface NormalizedTask {
   id: string;
   name: string;
@@ -21,6 +28,7 @@ export interface NormalizedTask {
   folder: { id: string; name: string };
   list: { id: string; name: string };
   url: string;
+  customFields: CustomField[];
 }
 
 export type TreeRow =

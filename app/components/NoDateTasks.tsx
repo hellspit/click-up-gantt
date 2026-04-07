@@ -13,7 +13,7 @@ function getStatusColor(status: string): string {
 }
 
 export default function NoDateTasks() {
-  const { noDateTasks } = useTaskStore();
+  const { noDateTasks, openTaskDetail } = useTaskStore();
   const [expanded, setExpanded] = useState(true);
 
   if (noDateTasks.length === 0) return null;
@@ -27,7 +27,7 @@ export default function NoDateTasks() {
       {expanded && (
         <div className="no-date-list">
           {noDateTasks.map(t => (
-            <div key={t.id} className="no-date-chip">
+            <div key={t.id} className="no-date-chip no-date-chip-clickable" onClick={() => openTaskDetail(t)}>
               <span className="status-badge" style={{ background: getStatusColor(t.status) }} />
               {t.name}
             </div>

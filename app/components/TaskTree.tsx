@@ -19,7 +19,7 @@ function getStatusColor(status: string, color: string): string {
 }
 
 export default function TaskTree({ rows, rowHeight }: Props) {
-  const { toggleGroup } = useTaskStore();
+  const { toggleGroup, openTaskDetail } = useTaskStore();
   const collapsed = useTaskStore(s => s.collapsedGroups);
 
   return (
@@ -29,7 +29,12 @@ export default function TaskTree({ rows, rowHeight }: Props) {
           const t = row.task;
           const indent = row.depth * 16 + 8;
           return (
-            <div key={t.id + '-' + i} className="tree-row" style={{ height: rowHeight }}>
+            <div
+              key={t.id + '-' + i}
+              className="tree-row tree-row-clickable"
+              style={{ height: rowHeight }}
+              onClick={() => openTaskDetail(t)}
+            >
               <div className="tree-indent" style={{ width: indent }} />
               {row.isSubtask && <span className="tree-subtask-prefix">└</span>}
               <span className="tree-status-dot" style={{ background: getStatusColor(t.status, t.statusColor) }} />

@@ -6,6 +6,8 @@ import { normalizeTask } from '../utils/taskNormalizer';
 import { getTimelineConfig } from '../utils/dateUtils';
 import { buildTaskHierarchy } from '../utils/taskGrouper';
 
+type ActiveView = 'gantt' | 'list' | 'status';
+
 interface TaskStore {
   members: ClickUpMember[];
   selectedUserId: string | null;
@@ -19,11 +21,16 @@ interface TaskStore {
   error: string | null;
   membersLoading: boolean;
   collapsedGroups: Set<string>;
+  activeView: ActiveView;
+  detailTask: NormalizedTask | null;
 
   fetchMembers: () => Promise<void>;
   fetchTasks: () => Promise<void>;
   setSelectedUser: (id: string, name: string) => void;
   toggleGroup: (groupId: string) => void;
+  setActiveView: (view: ActiveView) => void;
+  openTaskDetail: (task: NormalizedTask) => void;
+  closeTaskDetail: () => void;
   reset: () => void;
 }
 
@@ -40,6 +47,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   error: null,
   membersLoading: false,
   collapsedGroups: new Set(),
+  activeView: 'gantt',
+  detailTask: null,
 
   fetchMembers: async () => {
     set({ membersLoading: true, error: null });
@@ -76,6 +85,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const data = await res.json();
 
       const normalized = (data.tasks || []).map(normalizeTask);
+
       const dated = normalized.filter((t: NormalizedTask) => t.startDate && t.endDate);
       const undated = normalized.filter((t: NormalizedTask) => !t.startDate || !t.endDate);
       const treeRows = buildTaskHierarchy(dated);
@@ -107,7 +117,19 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     set({ collapsedGroups: newSet });
   },
 
+  setActiveView: (view: ActiveView) => {
+    set({ activeView: view });
+  },
+
+  openTaskDetail: (task: NormalizedTask) => {
+    set({ detailTask: task });
+  },
+
+  closeTaskDetail: () => {
+    set({ detailTask: null });
+  },
+
   reset: () => {
-    set({ tasks: [], noDateTasks: [], treeRows: [], timelineConfig: null, error: null, collapsedGroups: new Set() });
+    set({ tasks: [], noDateTasks: [], treeRows: [], timelineConfig: null, error: null, collapsedGroups: new Set(), detailTask: null });
   },
 }));

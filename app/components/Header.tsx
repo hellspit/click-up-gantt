@@ -3,8 +3,14 @@
 import { useState, useEffect, useRef } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
 
+const VIEW_TABS = [
+  { key: 'gantt' as const, icon: '📅', label: 'Gantt' },
+  { key: 'list' as const, icon: '📋', label: 'List' },
+  { key: 'status' as const, icon: '📈', label: 'Status' },
+];
+
 export default function Header() {
-  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, fetchMembers, fetchTasks, setSelectedUser } = useTaskStore();
+  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, activeView, fetchMembers, fetchTasks, setSelectedUser, setActiveView } = useTaskStore();
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -49,42 +55,58 @@ export default function Header() {
   };
 
   return (
-    <div className="app-header">
-      <div className="header-input-group">
-        <label className="header-label">Assignee Name or Email</label>
-        <div className="assignee-wrapper" ref={wrapperRef}>
-          <input
-            className="header-input"
-            placeholder={membersLoading ? 'Loading members...' : 'Type to search...'}
-            value={query}
-            onChange={e => { setQuery(e.target.value); setShowDropdown(true); }}
-            onFocus={() => setShowDropdown(true)}
-          />
-          {showDropdown && filtered.length > 0 && (
-            <div className="assignee-dropdown">
-              {filtered.map(m => (
-                <div key={m.id} className="assignee-option" onClick={() => handleSelect(m)}>
-                  <div className="assignee-avatar-sm">
-                    {m.profilePicture ? <img src={m.profilePicture} alt="" /> : m.initials}
+    <>
+      <div className="app-header">
+        <div className="header-input-group">
+          <label className="header-label">Assignee Name or Email</label>
+          <div className="assignee-wrapper" ref={wrapperRef}>
+            <input
+              className="header-input"
+              placeholder={membersLoading ? 'Loading members...' : 'Type to search...'}
+              value={query}
+              onChange={e => { setQuery(e.target.value); setShowDropdown(true); }}
+              onFocus={() => setShowDropdown(true)}
+            />
+            {showDropdown && filtered.length > 0 && (
+              <div className="assignee-dropdown">
+                {filtered.map(m => (
+                  <div key={m.id} className="assignee-option" onClick={() => handleSelect(m)}>
+                    <div className="assignee-avatar-sm">
+                      {m.profilePicture ? <img src={m.profilePicture} alt="" /> : m.initials}
+                    </div>
+                    <span>{m.username}</span>
+                    <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 'auto' }}>{m.email}</span>
                   </div>
-                  <span>{m.username}</span>
-                  <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 'auto' }}>{m.email}</span>
-                </div>
-              ))}
-            </div>
-          )}
+                ))}
+              </div>
+            )}
+          </div>
         </div>
+
+        <button className="btn-generate" onClick={handleGenerate} disabled={!selectedUserId || loading}>
+          {loading ? 'Loading...' : 'Generate'}
+        </button>
+
+        <div className="header-spacer" />
+
+        <button className="btn-export" onClick={handleExport} disabled={tasks.length === 0 || activeView !== 'gantt'}>
+          Export SVG
+        </button>
       </div>
 
-      <button className="btn-generate" onClick={handleGenerate} disabled={!selectedUserId || loading}>
-        {loading ? 'Loading...' : 'Generate'}
-      </button>
-
-      <div className="header-spacer" />
-
-      <button className="btn-export" onClick={handleExport} disabled={tasks.length === 0}>
-        Export SVG
-      </button>
-    </div>
+      {/* View Switcher */}
+      <div className="view-switcher">
+        {VIEW_TABS.map(tab => (
+          <button
+            key={tab.key}
+            className={`view-tab ${activeView === tab.key ? 'active' : ''}`}
+            onClick={() => setActiveView(tab.key)}
+          >
+            <span className="view-tab-icon">{tab.icon}</span>
+            {tab.label}
+          </button>
+        ))}
+      </div>
+    </>
   );
 }

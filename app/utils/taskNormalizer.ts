@@ -1,4 +1,4 @@
-import { NormalizedTask } from '../types';
+import { NormalizedTask, CustomField } from '../types';
 import { convertClickUpDate } from './dateUtils';
 
 export function normalizeTask(raw: any): NormalizedTask {
@@ -15,6 +15,16 @@ export function normalizeTask(raw: any): NormalizedTask {
   if (effectiveStart && !effectiveEnd) {
     effectiveEnd = new Date(effectiveStart.getTime() + 3 * 24 * 60 * 60 * 1000);
   }
+
+  // Extract custom fields
+  const customFields: CustomField[] = (raw.custom_fields || [])
+    .filter((cf: any) => cf.value !== null && cf.value !== undefined && cf.value !== '')
+    .map((cf: any) => ({
+      id: cf.id,
+      name: cf.name,
+      type: cf.type,
+      value: cf.value,
+    }));
 
   return {
     id: raw.id,
@@ -39,5 +49,7 @@ export function normalizeTask(raw: any): NormalizedTask {
     },
     list: { id: raw.list?.id || 'no-list', name: raw.list?.name || 'No List' },
     url: raw.url || '',
+    customFields,
   };
 }
+
