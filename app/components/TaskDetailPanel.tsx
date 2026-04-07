@@ -86,6 +86,8 @@ export default function TaskDetailPanel() {
   const task = useTaskStore(s => s.detailTask);
   const closeTaskDetail = useTaskStore(s => s.closeTaskDetail);
   const [fetchedFields, setFetchedFields] = useState<CustomField[]>([]);
+  const [taskDescription, setTaskDescription] = useState<string>('');
+  const [taskComments, setTaskComments] = useState<any[]>([]);
   const [loadingFields, setLoadingFields] = useState(false);
 
   useEffect(() => {
@@ -101,6 +103,8 @@ export default function TaskDetailPanel() {
   useEffect(() => {
     if (!task) {
       setFetchedFields([]);
+      setTaskDescription('');
+      setTaskComments([]);
       return;
     }
 
@@ -113,6 +117,8 @@ export default function TaskDetailPanel() {
         if (cancelled) return;
         const fields: CustomField[] = (data.customFields || []);
         setFetchedFields(fields);
+        setTaskDescription(data.text_content || data.description || '');
+        setTaskComments(data.comments || []);
         setLoadingFields(false);
       })
       .catch(() => {
@@ -326,7 +332,40 @@ export default function TaskDetailPanel() {
             </div>
           </div>
         )}
+        {/* Description */}
+        {taskDescription && (
+          <div className="detail-section">
+            <h3 className="detail-section-title">Description</h3>
+            <div className="detail-description">
+              {taskDescription}
+            </div>
+          </div>
+        )}
 
+        {/* Comments */}
+        {taskComments.length > 0 && (
+          <div className="detail-section">
+            <h3 className="detail-section-title">Comments ({taskComments.length})</h3>
+            <div className="detail-comments-list">
+              {taskComments.map((c: any) => (
+                <div key={c.id} className="detail-comment">
+                  <div className="detail-comment-header">
+                    <div className="detail-comment-avatar">
+                      {c.user?.profilePicture ? (
+                        <img src={c.user.profilePicture} alt="" />
+                      ) : (
+                        c.user?.initials || 'U'
+                      )}
+                    </div>
+                    <span className="detail-comment-user">{c.user?.username || 'User'}</span>
+                    <span className="detail-comment-date">{formatFullDate(new Date(parseInt(c.date)))}</span>
+                  </div>
+                  <div className="detail-comment-text">{c.comment_text}</div>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
         {/* Open in ClickUp */}
         {task.url && (
           <div className="detail-actions">

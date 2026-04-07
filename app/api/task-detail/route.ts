@@ -14,20 +14,32 @@ export async function GET(req: NextRequest) {
   }
 
   try {
-    const res = await fetch(
-      `https://api.clickup.com/api/v2/task/${taskId}?include_subtasks=true`,
-      { headers: { Authorization: apiKey } }
-    );
+    const [taskRes, commentsRes] = await Promise.all([
+      fetch(
+        `https://api.clickup.com/api/v2/task/${taskId}?include_subtasks=true`,
+        { headers: { Authorization: apiKey } }
+      ),
+      fetch(
+        `https://api.clickup.com/api/v2/task/${taskId}/comment`,
+        { headers: { Authorization: apiKey } }
+      )
+    ]);
 
-    if (!res.ok) {
-      const text = await res.text();
+    if (!taskRes.ok) {
+      const text = await taskRes.text();
       return NextResponse.json(
-        { error: `ClickUp API error: ${res.status} - ${text}` },
-        { status: res.status }
+        { error: `ClickUp API error (task): ${taskRes.status} - ${text}` },
+        { status: taskRes.status }
       );
     }
 
-    const task = await res.json();
+    const task = await taskRes.json();
+    
+    let comments = [];
+    if (commentsRes.ok) {
+      const commentsData = await commentsRes.json();
+      comments = commentsData.comments || [];
+    }
 
     // Extract custom fields, resolving drop_down values to labels
     const customFields = (task.custom_fields || []).map((cf: any) => {
@@ -55,7 +67,21 @@ export async function GET(req: NextRequest) {
       };
     });
 
-    return NextResponse.json({ customFields });
+    return NextResponse.json({ 
+      customFields,
+      description: task.description,
+      text_content: task.text_content,
+      comments: comments.map((c: any) => ({
+        id: c.id,
+        comment_text: c.comment_text || '',
+        date: c.date,
+        user: {
+          username: c.user?.username,
+          initials: c.user?.initials,
+          profilePicture: c.user?.profilePicture
+        }
+      }))
+    });
   } catch (err: any) {
     return NextResponse.json({ error: err.message }, { status: 500 });
   }

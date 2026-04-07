@@ -10,7 +10,7 @@ const VIEW_TABS = [
 ];
 
 export default function Header() {
-  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, activeView, fetchMembers, fetchTasks, setSelectedUser, setActiveView } = useTaskStore();
+  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, activeView, mode, activeTeamKey, fetchMembers, fetchTasks, setSelectedUser, setActiveView } = useTaskStore();
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
@@ -54,45 +54,70 @@ export default function Header() {
     URL.revokeObjectURL(url);
   };
 
+  const isTeamMode = mode === 'team';
+
   return (
     <>
-      <div className="app-header">
-        <div className="header-input-group">
-          <label className="header-label">Assignee Name or Email</label>
-          <div className="assignee-wrapper" ref={wrapperRef}>
-            <input
-              className="header-input"
-              placeholder={membersLoading ? 'Loading members...' : 'Type to search...'}
-              value={query}
-              onChange={e => { setQuery(e.target.value); setShowDropdown(true); }}
-              onFocus={() => setShowDropdown(true)}
-            />
-            {showDropdown && filtered.length > 0 && (
-              <div className="assignee-dropdown">
-                {filtered.map(m => (
-                  <div key={m.id} className="assignee-option" onClick={() => handleSelect(m)}>
-                    <div className="assignee-avatar-sm">
-                      {m.profilePicture ? <img src={m.profilePicture} alt="" /> : m.initials}
-                    </div>
-                    <span>{m.username}</span>
-                    <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 'auto' }}>{m.email}</span>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-
-        <button className="btn-generate" onClick={handleGenerate} disabled={!selectedUserId || loading}>
-          {loading ? 'Loading...' : 'Generate'}
-        </button>
-
-        <div className="header-spacer" />
-
-        <button className="btn-export" onClick={handleExport} disabled={tasks.length === 0 || activeView !== 'gantt'}>
-          Export SVG
-        </button>
+      {/* Navigation Bar */}
+      <div className="nav-bar">
+        <a
+          href="/"
+          className={`nav-link ${!isTeamMode ? 'nav-link-active' : ''}`}
+        >
+          <span className="nav-link-icon">👤</span>
+          Individual
+        </a>
+        <a
+          href="/team"
+          className={`nav-link ${isTeamMode ? 'nav-link-active' : ''}`}
+        >
+          <span className="nav-link-icon">👥</span>
+          Team
+        </a>
+        <div className="nav-spacer" />
+        <span className="nav-brand">ClickUp Dashboard</span>
       </div>
+
+      {/* Show individual controls only in individual mode */}
+      {!isTeamMode && (
+        <div className="app-header">
+          <div className="header-input-group">
+            <label className="header-label">Assignee Name or Email</label>
+            <div className="assignee-wrapper" ref={wrapperRef}>
+              <input
+                className="header-input"
+                placeholder={membersLoading ? 'Loading members...' : 'Type to search...'}
+                value={query}
+                onChange={e => { setQuery(e.target.value); setShowDropdown(true); }}
+                onFocus={() => setShowDropdown(true)}
+              />
+              {showDropdown && filtered.length > 0 && (
+                <div className="assignee-dropdown">
+                  {filtered.map(m => (
+                    <div key={m.id} className="assignee-option" onClick={() => handleSelect(m)}>
+                      <div className="assignee-avatar-sm">
+                        {m.profilePicture ? <img src={m.profilePicture} alt="" /> : m.initials}
+                      </div>
+                      <span>{m.username}</span>
+                      <span style={{ color: 'var(--text-muted)', fontSize: 11, marginLeft: 'auto' }}>{m.email}</span>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+
+          <button className="btn-generate" onClick={handleGenerate} disabled={!selectedUserId || loading}>
+            {loading ? 'Loading...' : 'Generate'}
+          </button>
+
+          <div className="header-spacer" />
+
+          <button className="btn-export" onClick={handleExport} disabled={tasks.length === 0 || activeView !== 'gantt'}>
+            Export SVG
+          </button>
+        </div>
+      )}
 
       {/* View Switcher */}
       <div className="view-switcher">
