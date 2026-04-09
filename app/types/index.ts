@@ -23,6 +23,7 @@ export interface NormalizedTask {
   startDate: Date | null;
   endDate: Date | null;
   dateCreated: Date;
+  dateCompleted: Date | null;
   parent: string | null;
   space: { id: string; name: string };
   folder: { id: string; name: string };

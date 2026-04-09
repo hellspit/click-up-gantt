@@ -4,9 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
 import { TEAMS, TeamDef } from '../teamConfig';
 import Header from '../components/Header';
-import SummaryBar from '../components/SummaryBar';
-import Dashboard from '../components/Dashboard';
-import NoDateTasks from '../components/NoDateTasks';
+import PieChartView from '../components/PieChartView';
 import ListView from '../components/ListView';
 import StatusView from '../components/StatusView';
 import TaskDetailPanel from '../components/TaskDetailPanel';
@@ -392,9 +390,6 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Summary Bar */}
-      {!showSelector && hasTasks && <SummaryBar />}
-
       {/* Error / Warning */}
       {error && (
         <div className="error-banner">
@@ -403,15 +398,10 @@ export default function TeamPage() {
         </div>
       )}
 
-      {/* Views — only show when selector is hidden */}
-      {!showSelector && (
+      {/* Views — shown when team is selected and tasks are loaded */}
+      {!showSelector && hasTasks && (
         <>
-          {activeView === 'gantt' && (
-            <>
-              <Dashboard />
-              <NoDateTasks />
-            </>
-          )}
+          {activeView === 'gantt' && <PieChartView />}
           {activeView === 'list' && <ListView />}
           {activeView === 'status' && <StatusView />}
         </>

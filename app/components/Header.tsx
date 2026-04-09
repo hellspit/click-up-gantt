@@ -119,9 +119,16 @@ export default function Header() {
         </div>
       )}
 
-      {/* View Switcher */}
+      {/* View Switcher — Pie replaces Gantt in team mode */}
       <div className="view-switcher">
-        {VIEW_TABS.map(tab => (
+        {(isTeamMode
+          ? [
+              { key: 'gantt' as const, icon: '🥧', label: 'Pie' },
+              { key: 'list' as const, icon: '📋', label: 'List' },
+              { key: 'status' as const, icon: '📈', label: 'Status' },
+            ]
+          : VIEW_TABS
+        ).map(tab => (
           <button
             key={tab.key}
             className={`view-tab ${activeView === tab.key ? 'active' : ''}`}

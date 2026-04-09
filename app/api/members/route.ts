@@ -31,7 +31,7 @@ export async function GET() {
     }));
 
     // Debug: log all members for team config name resolution
-    console.log('[Members API] All workspace members:', members.map((m: any) => `${m.id}: ${m.username} (${m.email})`));
+    // console.log('[Members API] All workspace members:', members.map((m: any) => `${m.id}: ${m.username} (${m.email})`));
 
     return NextResponse.json({ members });
   } catch (err: any) {

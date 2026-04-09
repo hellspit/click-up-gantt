@@ -5,6 +5,7 @@ export function normalizeTask(raw: any): NormalizedTask {
   const startDate = convertClickUpDate(raw.start_date);
   const endDate = convertClickUpDate(raw.due_date);
   const dateCreated = convertClickUpDate(raw.date_created) || new Date();
+  const dateCompleted = convertClickUpDate(raw.date_closed) || null;
 
   let effectiveStart = startDate;
   let effectiveEnd = endDate;
@@ -41,6 +42,7 @@ export function normalizeTask(raw: any): NormalizedTask {
     startDate: effectiveStart,
     endDate: effectiveEnd,
     dateCreated,
+    dateCompleted,
     parent: raw.parent || null,
     space: { id: raw.space?.id || 'no-space', name: raw.space?.name || 'No Space' },
     folder: {
