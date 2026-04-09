@@ -203,6 +203,324 @@ function resolveLabels(
   return positions;
 }
 
+// ── Comparison Bar Chart (SVG) ──
+
+interface MemberComparisonData {
+  name: string;
+  totalTasks: number;
+  delayedTasks: number;
+  completionRate: number; // percentage
+}
+
+function buildMemberComparison(allTasks: NormalizedTask[], teamMemberUsernames?: string[]): MemberComparisonData[] {
+  const memberMap = new Map<string, { total: NormalizedTask[]; delayed: NormalizedTask[] }>();
+
+  // Pre-initialize team members so they appear even with 0 tasks
+  if (teamMemberUsernames && teamMemberUsernames.length > 0) {
+    for (const name of teamMemberUsernames) {
+      memberMap.set(name, { total: [], delayed: [] });
+    }
+  }
+
+  for (const task of allTasks) {
+    const names = task.assignees.length > 0
+      ? task.assignees.map(a => a.username || 'Unknown')
+      : ['Unassigned'];
+
+    for (const name of names) {
+      // If team filter is active, skip non-team members
+      if (teamMemberUsernames && teamMemberUsernames.length > 0 && !teamMemberUsernames.includes(name)) {
+        continue;
+      }
+      if (!memberMap.has(name)) memberMap.set(name, { total: [], delayed: [] });
+      const entry = memberMap.get(name)!;
+      entry.total.push(task);
+      if (isTaskDelayed(task)) entry.delayed.push(task);
+    }
+  }
+
+  return Array.from(memberMap.entries())
+    .map(([name, data]) => {
+      const doneStatuses = ['complete', 'closed', 'done', 'resolved'];
+      const completed = data.total.filter(t =>
+        doneStatuses.includes(t.status.toLowerCase()) || t.statusType === 'closed'
+      ).length;
+      return {
+        name,
+        totalTasks: data.total.length,
+        delayedTasks: data.delayed.length,
+        completionRate: data.total.length > 0 ? Math.round((completed / data.total.length) * 100) : 0,
+      };
+    })
+    .sort((a, b) => b.totalTasks - a.totalTasks);
+}
+
+function ComparisonChart({
+  data,
+  highlightedMember,
+  chartType,
+}: {
+  data: MemberComparisonData[];
+  highlightedMember: string;
+  chartType: 'total' | 'delayed';
+}) {
+  const [hoveredIdx, setHoveredIdx] = useState<number | null>(null);
+
+  if (data.length === 0) return null;
+
+  const maxTotal = Math.max(...data.map(d => d.totalTasks), 1);
+  const barHeight = 28;
+  const rowGap = 6;
+  const labelWidth = 110;
+  const chartLeftPad = 16;
+  const chartRightPad = 50;
+  const topPad = 50;
+  const bottomPad = 30;
+  const chartAreaWidth = 340;
+  const totalWidth = labelWidth + chartLeftPad + chartAreaWidth + chartRightPad;
+  const totalHeight = topPad + data.length * (barHeight + rowGap) + bottomPad;
+
+  // Grid lines
+  const gridSteps = 5;
+  const gridLines = Array.from({ length: gridSteps + 1 }, (_, i) => {
+    const val = Math.round((maxTotal / gridSteps) * i);
+    const x = labelWidth + chartLeftPad + (val / maxTotal) * chartAreaWidth;
+    return { val, x };
+  });
+
+  return (
+    <div style={{ width: '100%', overflowX: 'hidden', overflowY: 'auto' }}>
+      {/* Chart title */}
+      <div style={{
+        padding: '14px 16px 4px',
+        fontSize: '11px',
+        fontWeight: 700,
+        textTransform: 'uppercase' as const,
+        letterSpacing: '1px',
+        color: 'var(--text-tertiary)',
+        display: 'flex',
+        alignItems: 'center',
+        gap: '8px',
+      }}>
+        <span>📊</span>
+        Team Comparison
+      </div>
+
+      {/* Legend */}
+      <div style={{
+        padding: '4px 16px 8px',
+        display: 'flex',
+        gap: '16px',
+        fontSize: '10px',
+        color: 'var(--text-secondary)',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#4e79f6' }} />
+          <span>Delayed Tasks</span>
+        </div>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
+          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#e15759' }} />
+          <span>Total Tasks</span>
+        </div>
+      </div>
+
+      <svg
+        width="100%"
+        viewBox={`0 0 ${totalWidth} ${totalHeight}`}
+        style={{ display: 'block' }}
+      >
+        {/* Grid lines */}
+        {gridLines.map((g, i) => (
+          <g key={`grid-${i}`}>
+            <line
+              x1={g.x} y1={topPad - 10}
+              x2={g.x} y2={topPad + data.length * (barHeight + rowGap) - rowGap}
+              stroke="rgba(255,255,255,0.06)"
+              strokeWidth="1"
+              strokeDasharray={i === 0 ? undefined : '3 3'}
+            />
+            <text
+              x={g.x}
+              y={topPad - 16}
+              textAnchor="middle"
+              fill="var(--text-muted)"
+              fontSize="9"
+              fontFamily="var(--font-mono)"
+            >
+              {g.val}
+            </text>
+          </g>
+        ))}
+
+        {/* Bars */}
+        {data.map((member, idx) => {
+          const y = topPad + idx * (barHeight + rowGap);
+          const isHighlighted = member.name === highlightedMember;
+          const isHovered = hoveredIdx === idx;
+          const totalBarW = Math.max((member.totalTasks / maxTotal) * chartAreaWidth, 2);
+          const delayedBarW = Math.max((member.delayedTasks / maxTotal) * chartAreaWidth, member.delayedTasks > 0 ? 2 : 0);
+          const barX = labelWidth + chartLeftPad;
+
+          return (
+            <g
+              key={member.name}
+              onMouseEnter={() => setHoveredIdx(idx)}
+              onMouseLeave={() => setHoveredIdx(null)}
+              style={{ cursor: 'default' }}
+            >
+              {/* Highlight background for selected member */}
+              {isHighlighted && (
+                <rect
+                  x={0}
+                  y={y - 3}
+                  width={totalWidth}
+                  height={barHeight + 6}
+                  rx={4}
+                  fill="rgba(78, 121, 246, 0.08)"
+                  stroke="rgba(78, 121, 246, 0.25)"
+                  strokeWidth="1"
+                />
+              )}
+
+              {/* Hover background */}
+              {isHovered && !isHighlighted && (
+                <rect
+                  x={0}
+                  y={y - 2}
+                  width={totalWidth}
+                  height={barHeight + 4}
+                  rx={3}
+                  fill="rgba(255,255,255,0.03)"
+                />
+              )}
+
+              {/* Member name */}
+              <text
+                x={labelWidth - 6}
+                y={y + barHeight / 2}
+                textAnchor="end"
+                dominantBaseline="middle"
+                fill={isHighlighted ? '#4e79f6' : 'var(--text-secondary)'}
+                fontSize="10.5"
+                fontWeight={isHighlighted ? 700 : 500}
+                fontFamily="var(--font-sans)"
+              >
+                {member.name.length > 14 ? member.name.slice(0, 13) + '…' : member.name}
+              </text>
+
+              {/* Total bar (background) */}
+              <rect
+                x={barX}
+                y={y + 2}
+                width={totalBarW}
+                height={barHeight / 2 - 2}
+                rx={3}
+                fill={isHighlighted ? '#e15759' : 'rgba(225, 87, 89, 0.6)'}
+                opacity={isHovered ? 1 : 0.85}
+                style={{ transition: 'opacity 0.15s' }}
+              />
+
+              {/* Delayed bar */}
+              {delayedBarW > 0 && (
+                <rect
+                  x={barX}
+                  y={y + barHeight / 2 + 1}
+                  width={delayedBarW}
+                  height={barHeight / 2 - 3}
+                  rx={3}
+                  fill={isHighlighted ? '#4e79f6' : 'rgba(78, 121, 246, 0.6)'}
+                  opacity={isHovered ? 1 : 0.85}
+                  style={{ transition: 'opacity 0.15s' }}
+                />
+              )}
+
+              {/* Total count label */}
+              <text
+                x={barX + totalBarW + 6}
+                y={y + barHeight / 4 + 1}
+                dominantBaseline="middle"
+                fill={isHighlighted ? '#e15759' : 'var(--text-tertiary)'}
+                fontSize="9"
+                fontWeight={700}
+                fontFamily="var(--font-mono)"
+              >
+                {member.totalTasks}
+              </text>
+
+              {/* Delayed count label */}
+              {member.delayedTasks > 0 && (
+                <text
+                  x={barX + delayedBarW + 6}
+                  y={y + barHeight * 3 / 4}
+                  dominantBaseline="middle"
+                  fill={isHighlighted ? '#4e79f6' : 'var(--text-muted)'}
+                  fontSize="9"
+                  fontWeight={600}
+                  fontFamily="var(--font-mono)"
+                >
+                  {member.delayedTasks}
+                </text>
+              )}
+            </g>
+          );
+        })}
+      </svg>
+
+      {/* Summary stats for highlighted member */}
+      {(() => {
+        const m = data.find(d => d.name === highlightedMember);
+        if (!m) return null;
+        const rank = data.findIndex(d => d.name === highlightedMember) + 1;
+        const avgTotal = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.totalTasks, 0) / data.length) : 0;
+        const avgDelayed = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.delayedTasks, 0) / data.length) : 0;
+
+        return (
+          <div style={{
+            margin: '8px 16px 16px',
+            padding: '12px 14px',
+            background: 'rgba(78, 121, 246, 0.06)',
+            border: '1px solid rgba(78, 121, 246, 0.15)',
+            borderRadius: '10px',
+          }}>
+            <div style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              textTransform: 'uppercase' as const,
+              letterSpacing: '0.8px',
+              color: '#4e79f6',
+              marginBottom: '10px',
+            }}>
+              {highlightedMember}'s Stats
+            </div>
+            <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '8px' }}>
+              {[
+                { label: 'Rank', value: `#${rank} of ${data.length}`, color: 'var(--text-primary)' },
+                { label: 'Completion', value: `${m.completionRate}%`, color: m.completionRate >= 70 ? '#3fb950' : m.completionRate >= 40 ? '#d29922' : '#f85149' },
+                { label: 'vs Avg Tasks', value: m.totalTasks >= avgTotal ? `+${m.totalTasks - avgTotal}` : `${m.totalTasks - avgTotal}`, color: 'var(--text-secondary)' },
+                { label: 'vs Avg Delayed', value: m.delayedTasks <= avgDelayed ? `${m.delayedTasks - avgDelayed}` : `+${m.delayedTasks - avgDelayed}`, color: m.delayedTasks <= avgDelayed ? '#3fb950' : '#f85149' },
+              ].map(stat => (
+                <div key={stat.label} style={{
+                  padding: '6px 8px',
+                  background: 'rgba(0,0,0,0.2)',
+                  borderRadius: '6px',
+                }}>
+                  <div style={{ fontSize: '9px', color: 'var(--text-muted)', textTransform: 'uppercase' as const, letterSpacing: '0.5px', marginBottom: '2px' }}>
+                    {stat.label}
+                  </div>
+                  <div style={{ fontSize: '14px', fontWeight: 700, color: stat.color, fontFamily: 'var(--font-mono)' }}>
+                    {stat.value}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </div>
+        );
+      })()}
+    </div>
+  );
+}
+
+
 // ── Member Task List Panel (inline styles) ──
 
 function MemberTaskPanel({
@@ -211,16 +529,23 @@ function MemberTaskPanel({
   tasks,
   onClose,
   chartType,
+  allFilteredTasks,
 }: {
   memberName: string;
   memberColor: string;
   tasks: NormalizedTask[];
   onClose: () => void;
   chartType: 'total' | 'delayed';
+  allFilteredTasks: NormalizedTask[];
 }) {
   const openTaskDetail = useTaskStore(s => s.openTaskDetail);
+  const resolvedTeamMembers = useTaskStore(s => s.resolvedTeamMembers);
   const grouped = useMemo(() => groupTasksByStatus(tasks), [tasks]);
   const [collapsedSections, setCollapsedSections] = useState<Set<string>>(new Set());
+
+  // Only show team members in comparison chart
+  const teamUsernames = useMemo(() => resolvedTeamMembers.map(m => m.username), [resolvedTeamMembers]);
+  const comparisonData = useMemo(() => buildMemberComparison(allFilteredTasks, teamUsernames), [allFilteredTasks, teamUsernames]);
 
   const toggleSection = (key: string) => {
     setCollapsedSections(prev => {
@@ -250,8 +575,8 @@ function MemberTaskPanel({
           position: 'fixed',
           top: 0,
           right: 0,
-          width: '620px',
-          maxWidth: '92vw',
+          width: '1100px',
+          maxWidth: '96vw',
           height: '100vh',
           background: 'var(--bg-secondary)',
           borderLeft: '1px solid var(--border-primary)',
@@ -322,255 +647,275 @@ function MemberTaskPanel({
           </button>
         </div>
 
-        {/* Task list grouped by status */}
-        <div style={{ flex: 1, overflowY: 'auto' }}>
-          {STATUS_GROUPS.map(group => {
-            const groupTasks = grouped.get(group.key) || [];
-            if (groupTasks.length === 0) return null;
-            const collapsed = collapsedSections.has(group.key);
+        {/* Two-column body: Left = Comparison, Right = Task List */}
+        <div style={{ flex: 1, display: 'flex', overflow: 'hidden' }}>
+          {/* Left: Comparison Chart */}
+          <div
+            style={{
+              width: '480px',
+              minWidth: '380px',
+              borderRight: '1px solid var(--border-primary)',
+              overflowY: 'auto',
+              background: 'rgba(0,0,0,0.1)',
+            }}
+          >
+            <ComparisonChart
+              data={comparisonData}
+              highlightedMember={memberName}
+              chartType={chartType}
+            />
+          </div>
 
-            return (
-              <div key={group.key} style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                {/* Section header */}
-                <div
-                  onClick={() => toggleSection(group.key)}
-                  style={{
-                    display: 'flex',
-                    alignItems: 'center',
-                    gap: '10px',
-                    padding: '10px 20px',
-                    cursor: 'pointer',
-                    userSelect: 'none',
-                  }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <span
+          {/* Right: Task list grouped by status */}
+          <div style={{ flex: 1, overflowY: 'auto' }}>
+            {STATUS_GROUPS.map(group => {
+              const groupTasks = grouped.get(group.key) || [];
+              if (groupTasks.length === 0) return null;
+              const collapsed = collapsedSections.has(group.key);
+
+              return (
+                <div key={group.key} style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                  {/* Section header */}
+                  <div
+                    onClick={() => toggleSection(group.key)}
                     style={{
-                      fontSize: '8px',
-                      color: 'var(--text-muted)',
-                      transition: 'transform 0.2s',
-                      transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)',
-                      width: '14px',
-                      textAlign: 'center',
-                    }}
-                  >
-                    ▼
-                  </span>
-                  <span
-                    style={{
-                      display: 'inline-flex',
+                      display: 'flex',
                       alignItems: 'center',
-                      gap: '5px',
-                      padding: '3px 10px',
-                      borderRadius: '4px',
-                      fontSize: '11px',
-                      fontWeight: 700,
-                      color: '#fff',
-                      letterSpacing: '0.5px',
-                      background: group.color,
+                      gap: '10px',
+                      padding: '10px 20px',
+                      cursor: 'pointer',
+                      userSelect: 'none',
                     }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
                   >
-                    {group.icon} {group.label}
-                  </span>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)', marginLeft: '4px' }}>
-                    {groupTasks.length}
-                  </span>
-                </div>
-
-                {/* Task rows */}
-                {!collapsed && (
-                  <div>
-                    {/* Column header */}
-                    <div
+                    <span
                       style={{
-                        display: 'grid',
-                        gridTemplateColumns: '1fr 80px 90px 90px',
-                        gap: '8px',
-                        padding: '6px 20px 6px 44px',
-                        fontSize: '10px',
-                        fontWeight: 600,
-                        textTransform: 'uppercase' as const,
-                        letterSpacing: '0.8px',
+                        fontSize: '8px',
                         color: 'var(--text-muted)',
-                        borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        transition: 'transform 0.2s',
+                        transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)',
+                        width: '14px',
+                        textAlign: 'center',
                       }}
                     >
-                      <span>Name</span>
-                      <span style={{ textAlign: 'center' }}>Assignee</span>
-                      <span style={{ textAlign: 'center' }}>Start date</span>
-                      <span style={{ textAlign: 'center' }}>Due date</span>
-                    </div>
+                      ▼
+                    </span>
+                    <span
+                      style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '5px',
+                        padding: '3px 10px',
+                        borderRadius: '4px',
+                        fontSize: '11px',
+                        fontWeight: 700,
+                        color: '#fff',
+                        letterSpacing: '0.5px',
+                        background: group.color,
+                      }}
+                    >
+                      {group.icon} {group.label}
+                    </span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)', marginLeft: '4px' }}>
+                      {groupTasks.length}
+                    </span>
+                  </div>
 
-                    {groupTasks.map(task => {
-                      const overdue = task.endDate && task.endDate < new Date() &&
-                        !['complete', 'closed', 'done'].includes(task.status.toLowerCase()) &&
-                        task.statusType !== 'closed';
+                  {/* Task rows */}
+                  {!collapsed && (
+                    <div>
+                      {/* Column header */}
+                      <div
+                        style={{
+                          display: 'grid',
+                          gridTemplateColumns: '1fr 80px 90px 90px',
+                          gap: '8px',
+                          padding: '6px 20px 6px 44px',
+                          fontSize: '10px',
+                          fontWeight: 600,
+                          textTransform: 'uppercase' as const,
+                          letterSpacing: '0.8px',
+                          color: 'var(--text-muted)',
+                          borderBottom: '1px solid rgba(255,255,255,0.04)',
+                        }}
+                      >
+                        <span>Name</span>
+                        <span style={{ textAlign: 'center' }}>Assignee</span>
+                        <span style={{ textAlign: 'center' }}>Start date</span>
+                        <span style={{ textAlign: 'center' }}>Due date</span>
+                      </div>
 
-                      return (
-                        <div
-                          key={task.id}
-                          onClick={() => openTaskDetail(task)}
-                          style={{
-                            display: 'grid',
-                            gridTemplateColumns: '1fr 80px 90px 90px',
-                            gap: '8px',
-                            alignItems: 'center',
-                            padding: '9px 20px 9px 44px',
-                            fontSize: '12px',
-                            borderBottom: '1px solid rgba(255,255,255,0.04)',
-                            cursor: 'pointer',
-                            transition: 'background 0.15s',
-                            background: overdue ? 'rgba(248, 81, 73, 0.04)' : 'transparent',
-                          }}
-                          onMouseEnter={e => (e.currentTarget.style.background = overdue ? 'rgba(248, 81, 73, 0.08)' : 'rgba(88, 166, 255, 0.06)')}
-                          onMouseLeave={e => (e.currentTarget.style.background = overdue ? 'rgba(248, 81, 73, 0.04)' : 'transparent')}
-                        >
-                          {/* Task Name */}
-                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                            <span
-                              style={{
-                                width: '7px',
-                                height: '7px',
-                                borderRadius: '50%',
-                                flexShrink: 0,
-                                background: task.statusColor || group.color,
-                              }}
-                            />
+                      {groupTasks.map(task => {
+                        const overdue = task.endDate && task.endDate < new Date() &&
+                          !['complete', 'closed', 'done'].includes(task.status.toLowerCase()) &&
+                          task.statusType !== 'closed';
+
+                        return (
+                          <div
+                            key={task.id}
+                            onClick={() => openTaskDetail(task)}
+                            style={{
+                              display: 'grid',
+                              gridTemplateColumns: '1fr 80px 90px 90px',
+                              gap: '8px',
+                              alignItems: 'center',
+                              padding: '9px 20px 9px 44px',
+                              fontSize: '12px',
+                              borderBottom: '1px solid rgba(255,255,255,0.04)',
+                              cursor: 'pointer',
+                              transition: 'background 0.15s',
+                              background: overdue ? 'rgba(248, 81, 73, 0.04)' : 'transparent',
+                            }}
+                            onMouseEnter={e => (e.currentTarget.style.background = overdue ? 'rgba(248, 81, 73, 0.08)' : 'rgba(88, 166, 255, 0.06)')}
+                            onMouseLeave={e => (e.currentTarget.style.background = overdue ? 'rgba(248, 81, 73, 0.04)' : 'transparent')}
+                          >
+                            {/* Task Name */}
+                            <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                              <span
+                                style={{
+                                  width: '7px',
+                                  height: '7px',
+                                  borderRadius: '50%',
+                                  flexShrink: 0,
+                                  background: task.statusColor || group.color,
+                                }}
+                              />
+                              <span
+                                style={{
+                                  fontFamily: 'var(--font-mono)',
+                                  fontSize: '12px',
+                                  color: 'var(--text-primary)',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                }}
+                              >
+                                {task.name}
+                              </span>
+                            </div>
+
+                            {/* Assignee avatars */}
+                            <div style={{ display: 'flex', justifyContent: 'center' }}>
+                              {task.assignees.slice(0, 2).map((a, ai) => (
+                                <div
+                                  key={ai}
+                                  title={a.username}
+                                  style={{
+                                    width: '24px',
+                                    height: '24px',
+                                    borderRadius: '50%',
+                                    background: 'var(--bg-tertiary)',
+                                    display: 'flex',
+                                    alignItems: 'center',
+                                    justifyContent: 'center',
+                                    fontSize: '8px',
+                                    fontWeight: 700,
+                                    color: 'var(--text-secondary)',
+                                    border: '2px solid var(--bg-secondary)',
+                                    overflow: 'hidden',
+                                    flexShrink: 0,
+                                    marginLeft: ai > 0 ? '-6px' : 0,
+                                  }}
+                                >
+                                  {a.profilePicture ? (
+                                    <img src={a.profilePicture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                                  ) : (
+                                    a.initials
+                                  )}
+                                </div>
+                              ))}
+                            </div>
+
+                            {/* Start date */}
                             <span
                               style={{
                                 fontFamily: 'var(--font-mono)',
-                                fontSize: '12px',
-                                color: 'var(--text-primary)',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
+                                fontSize: '11px',
+                                color: 'var(--text-tertiary)',
+                                textAlign: 'center',
                                 whiteSpace: 'nowrap',
                               }}
                             >
-                              {task.name}
+                              {formatDate(task.startDate)}
+                            </span>
+
+                            {/* Due date */}
+                            <span
+                              style={{
+                                fontFamily: 'var(--font-mono)',
+                                fontSize: '11px',
+                                color: overdue ? '#f85149' : 'var(--text-tertiary)',
+                                fontWeight: overdue ? 600 : 400,
+                                textAlign: 'center',
+                                whiteSpace: 'nowrap',
+                              }}
+                            >
+                              {formatDate(task.endDate)}
                             </span>
                           </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
-                          {/* Assignee avatars */}
+            {/* "Other" status bucket */}
+            {(() => {
+              const otherTasks = grouped.get('other') || [];
+              if (otherTasks.length === 0) return null;
+              const collapsed = collapsedSections.has('other');
+              return (
+                <div style={{ borderBottom: '1px solid var(--border-primary)' }}>
+                  <div
+                    onClick={() => toggleSection('other')}
+                    style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', cursor: 'pointer' }}
+                    onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
+                    onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                  >
+                    <span style={{ fontSize: '8px', color: 'var(--text-muted)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)', width: '14px', textAlign: 'center' }}>▼</span>
+                    <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, color: '#fff', background: '#6e7681' }}>○ OTHER</span>
+                    <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)' }}>{otherTasks.length}</span>
+                  </div>
+                  {!collapsed && (
+                    <div>
+                      <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px 90px', gap: '8px', padding: '6px 20px 6px 44px', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.8px', color: 'var(--text-muted)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
+                        <span>Name</span>
+                        <span style={{ textAlign: 'center' }}>Assignee</span>
+                        <span style={{ textAlign: 'center' }}>Start date</span>
+                        <span style={{ textAlign: 'center' }}>Due date</span>
+                      </div>
+                      {otherTasks.map(task => (
+                        <div
+                          key={task.id}
+                          onClick={() => openTaskDetail(task)}
+                          style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px 90px', gap: '8px', alignItems: 'center', padding: '9px 20px 9px 44px', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', transition: 'background 0.15s' }}
+                          onMouseEnter={e => (e.currentTarget.style.background = 'rgba(88, 166, 255, 0.06)')}
+                          onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
+                        >
+                          <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
+                            <span style={{ width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0, background: task.statusColor }} />
+                            <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.name}</span>
+                          </div>
                           <div style={{ display: 'flex', justifyContent: 'center' }}>
                             {task.assignees.slice(0, 2).map((a, ai) => (
-                              <div
-                                key={ai}
-                                title={a.username}
-                                style={{
-                                  width: '24px',
-                                  height: '24px',
-                                  borderRadius: '50%',
-                                  background: 'var(--bg-tertiary)',
-                                  display: 'flex',
-                                  alignItems: 'center',
-                                  justifyContent: 'center',
-                                  fontSize: '8px',
-                                  fontWeight: 700,
-                                  color: 'var(--text-secondary)',
-                                  border: '2px solid var(--bg-secondary)',
-                                  overflow: 'hidden',
-                                  flexShrink: 0,
-                                  marginLeft: ai > 0 ? '-6px' : 0,
-                                }}
-                              >
-                                {a.profilePicture ? (
-                                  <img src={a.profilePicture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
-                                ) : (
-                                  a.initials
-                                )}
+                              <div key={ai} title={a.username} style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: 'var(--text-secondary)', border: '2px solid var(--bg-secondary)', overflow: 'hidden', marginLeft: ai > 0 ? '-6px' : 0 }}>
+                                {a.profilePicture ? <img src={a.profilePicture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : a.initials}
                               </div>
                             ))}
                           </div>
-
-                          {/* Start date */}
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '11px',
-                              color: 'var(--text-tertiary)',
-                              textAlign: 'center',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {formatDate(task.startDate)}
-                          </span>
-
-                          {/* Due date */}
-                          <span
-                            style={{
-                              fontFamily: 'var(--font-mono)',
-                              fontSize: '11px',
-                              color: overdue ? '#f85149' : 'var(--text-tertiary)',
-                              fontWeight: overdue ? 600 : 400,
-                              textAlign: 'center',
-                              whiteSpace: 'nowrap',
-                            }}
-                          >
-                            {formatDate(task.endDate)}
-                          </span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center' }}>{formatDate(task.startDate)}</span>
+                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center' }}>{formatDate(task.endDate)}</span>
                         </div>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-
-          {/* "Other" status bucket */}
-          {(() => {
-            const otherTasks = grouped.get('other') || [];
-            if (otherTasks.length === 0) return null;
-            const collapsed = collapsedSections.has('other');
-            return (
-              <div style={{ borderBottom: '1px solid var(--border-primary)' }}>
-                <div
-                  onClick={() => toggleSection('other')}
-                  style={{ display: 'flex', alignItems: 'center', gap: '10px', padding: '10px 20px', cursor: 'pointer' }}
-                  onMouseEnter={e => (e.currentTarget.style.background = 'rgba(255,255,255,0.02)')}
-                  onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                >
-                  <span style={{ fontSize: '8px', color: 'var(--text-muted)', transform: collapsed ? 'rotate(-90deg)' : 'rotate(0)', width: '14px', textAlign: 'center' }}>▼</span>
-                  <span style={{ display: 'inline-flex', alignItems: 'center', gap: '5px', padding: '3px 10px', borderRadius: '4px', fontSize: '11px', fontWeight: 700, color: '#fff', background: '#6e7681' }}>○ OTHER</span>
-                  <span style={{ fontSize: '12px', fontWeight: 700, color: 'var(--text-tertiary)' }}>{otherTasks.length}</span>
-                </div>
-                {!collapsed && (
-                  <div>
-                    <div style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px 90px', gap: '8px', padding: '6px 20px 6px 44px', fontSize: '10px', fontWeight: 600, textTransform: 'uppercase' as const, letterSpacing: '0.8px', color: 'var(--text-muted)', borderBottom: '1px solid rgba(255,255,255,0.04)' }}>
-                      <span>Name</span>
-                      <span style={{ textAlign: 'center' }}>Assignee</span>
-                      <span style={{ textAlign: 'center' }}>Start date</span>
-                      <span style={{ textAlign: 'center' }}>Due date</span>
+                      ))}
                     </div>
-                    {otherTasks.map(task => (
-                      <div
-                        key={task.id}
-                        onClick={() => openTaskDetail(task)}
-                        style={{ display: 'grid', gridTemplateColumns: '1fr 80px 90px 90px', gap: '8px', alignItems: 'center', padding: '9px 20px 9px 44px', fontSize: '12px', borderBottom: '1px solid rgba(255,255,255,0.04)', cursor: 'pointer', transition: 'background 0.15s' }}
-                        onMouseEnter={e => (e.currentTarget.style.background = 'rgba(88, 166, 255, 0.06)')}
-                        onMouseLeave={e => (e.currentTarget.style.background = 'transparent')}
-                      >
-                        <div style={{ display: 'flex', alignItems: 'center', gap: '8px', overflow: 'hidden' }}>
-                          <span style={{ width: '7px', height: '7px', borderRadius: '50%', flexShrink: 0, background: task.statusColor }} />
-                          <span style={{ fontFamily: 'var(--font-mono)', fontSize: '12px', color: 'var(--text-primary)', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{task.name}</span>
-                        </div>
-                        <div style={{ display: 'flex', justifyContent: 'center' }}>
-                          {task.assignees.slice(0, 2).map((a, ai) => (
-                            <div key={ai} title={a.username} style={{ width: '24px', height: '24px', borderRadius: '50%', background: 'var(--bg-tertiary)', display: 'flex', alignItems: 'center', justifyContent: 'center', fontSize: '8px', fontWeight: 700, color: 'var(--text-secondary)', border: '2px solid var(--bg-secondary)', overflow: 'hidden', marginLeft: ai > 0 ? '-6px' : 0 }}>
-                              {a.profilePicture ? <img src={a.profilePicture} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} /> : a.initials}
-                            </div>
-                          ))}
-                        </div>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center' }}>{formatDate(task.startDate)}</span>
-                        <span style={{ fontFamily: 'var(--font-mono)', fontSize: '11px', color: 'var(--text-tertiary)', textAlign: 'center' }}>{formatDate(task.endDate)}</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            );
-          })()}
+                  )}
+                </div>
+              );
+            })()}
+          </div>
         </div>
       </div>
     </>
@@ -585,12 +930,14 @@ function PieChart({
   totalCount,
   filteredTasks,
   chartType,
+  allFilteredTasks,
 }: {
   slices: SliceData[];
   title: string;
   totalCount: number;
   filteredTasks: NormalizedTask[];
   chartType: 'total' | 'delayed';
+  allFilteredTasks: NormalizedTask[];
 }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedMember, setSelectedMember] = useState<{ name: string; color: string } | null>(null);
@@ -775,6 +1122,7 @@ function PieChart({
           tasks={selectedMemberTasks}
           onClose={() => setSelectedMember(null)}
           chartType={chartType}
+          allFilteredTasks={allFilteredTasks}
         />
       )}
     </div>
@@ -1024,6 +1372,7 @@ export default function PieChartView() {
           totalCount={filteredTasks.length}
           filteredTasks={filteredTasks}
           chartType="total"
+          allFilteredTasks={filteredTasks}
         />
         <PieChart
           slices={delayedSlices}
@@ -1031,6 +1380,7 @@ export default function PieChartView() {
           totalCount={delayedTasks.length}
           filteredTasks={delayedTasks}
           chartType="delayed"
+          allFilteredTasks={filteredTasks}
         />
       </div>
     </div>
