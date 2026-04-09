@@ -30,6 +30,9 @@ export async function GET() {
       profilePicture: m.user.profilePicture || null,
     }));
 
+    // Debug: log all members for team config name resolution
+    console.log('[Members API] All workspace members:', members.map((m: any) => `${m.id}: ${m.username} (${m.email})`));
+
     return NextResponse.json({ members });
   } catch (err: any) {
     return NextResponse.json({ error: `Failed to fetch team: ${err.message}` }, { status: 500 });

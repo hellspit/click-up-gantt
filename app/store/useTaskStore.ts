@@ -110,6 +110,12 @@ function filterTasksByMembers(allTasks: NormalizedTask[], filterIds: Set<number>
 /**
  * Resolve team member names to ClickUp user IDs by fuzzy-matching
  * against the workspace members list.
+ *
+ * Matching strategies (in priority order):
+ * 1. Exact username or email-prefix match
+ * 2. Username contains full name (no spaces) or vice-versa
+ * 3. All words of the config name appear in the username/email
+ * 4. Any single word (≥3 chars) of the config name matches as a prefix of a username word
  */
 function resolveTeamMembers(
   memberNames: string[],
@@ -120,20 +126,69 @@ function resolveTeamMembers(
 
   for (const name of memberNames) {
     const lower = name.toLowerCase().trim();
-    const match = allMembers.find(
+    const nameParts = lower.split(/\s+/).filter(Boolean);
+    const nameNoSpaces = nameParts.join('');
+
+    let match: ClickUpMember | undefined;
+
+    // Strategy 1: Exact match on username or email prefix
+    match = allMembers.find(
       (m) =>
         m.username.toLowerCase() === lower ||
-        m.email.toLowerCase().split('@')[0] === lower ||
-        m.username.toLowerCase().includes(lower) ||
-        lower.includes(m.username.toLowerCase())
+        m.email.toLowerCase().split('@')[0] === lower
     );
-    if (match) {
-      resolved.push({
-        id: match.id,
-        name,
-        username: match.username,
-        profilePicture: match.profilePicture,
+
+    // Strategy 2: Username/email contains the name (ignoring spaces) or vice versa
+    if (!match) {
+      match = allMembers.find((m) => {
+        const uLower = m.username.toLowerCase().replace(/[\s_.-]/g, '');
+        const eLower = m.email.toLowerCase().split('@')[0].replace(/[\s_.-]/g, '');
+        return (
+          uLower.includes(nameNoSpaces) ||
+          nameNoSpaces.includes(uLower) ||
+          eLower.includes(nameNoSpaces) ||
+          nameNoSpaces.includes(eLower)
+        );
       });
+    }
+
+    // Strategy 3: All words appear in username or email
+    if (!match && nameParts.length > 1) {
+      match = allMembers.find((m) => {
+        const uLower = m.username.toLowerCase();
+        const eLower = m.email.toLowerCase().split('@')[0];
+        return (
+          nameParts.every((w) => uLower.includes(w)) ||
+          nameParts.every((w) => eLower.includes(w))
+        );
+      });
+    }
+
+    // Strategy 4: Any significant word matches the start of a username/email word
+    if (!match) {
+      const significantParts = nameParts.filter((w) => w.length >= 3);
+      if (significantParts.length > 0) {
+        match = allMembers.find((m) => {
+          const uWords = m.username.toLowerCase().split(/[\s_.-]+/);
+          const eWords = m.email.toLowerCase().split('@')[0].split(/[\s_.-]+/);
+          const allWords = [...uWords, ...eWords];
+          return significantParts.some((sp) =>
+            allWords.some((w) => w.startsWith(sp) || sp.startsWith(w))
+          );
+        });
+      }
+    }
+
+    if (match) {
+      // Avoid duplicate resolved members
+      if (!resolved.some((r) => r.id === match!.id)) {
+        resolved.push({
+          id: match.id,
+          name,
+          username: match.username,
+          profilePicture: match.profilePicture,
+        });
+      }
     } else {
       unresolved.push(name);
     }
@@ -299,6 +354,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
     if (unresolved.length > 0) {
       console.warn(`[Team ${team.name}] Could not resolve members:`, unresolved);
+      console.warn(`[Team ${team.name}] Available workspace members:`, members.map(m => `${m.username} (${m.email})`));
     }
 
     try {

@@ -11,7 +11,7 @@ export const TEAMS: TeamDef[] = [
   {
     key: 'ams',
     name: 'AMS',
-    description: 'Application Management Services',
+    description: 'Analog and Mixed Signal',
     color: '#58a6ff',
     icon: '🔷',
     memberNames: [
@@ -33,7 +33,7 @@ export const TEAMS: TeamDef[] = [
     name: 'RTL',
     description: 'RTL Team',
     color: '#bc8cff',
-    icon: '🔶',
+    icon: '⏩',
     memberNames: [
       'Abhishek Sarkar',
       'Arka Chakraborty',
@@ -52,14 +52,13 @@ export const TEAMS: TeamDef[] = [
   {
     key: 'ps',
     name: 'PS',
-    description: 'Professional Services',
+    description: 'post silicon',
     color: '#3fb950',
     icon: '🟢',
     memberNames: [
       'Vinayak Agrawal',
       'Manash Dey',
       'sumon',
-      'Shiva Teja',
       'Anish Saha',
       'Deepthi Kammath',
       'Tomin Jose',
