@@ -78,6 +78,34 @@ function isTaskDelayed(task: NormalizedTask): boolean {
   return false;
 }
 
+function isTaskActuallyDelayed(task: NormalizedTask): boolean {
+  const customField = task.customFields.find(cf => cf.name.toLowerCase() === 'delayed');
+  if (!customField) return false;
+  
+  if (customField.type === 'drop_down' && customField.typeConfig?.options) {
+      const optionByIndex = customField.typeConfig.options.find((opt: any) => opt.orderindex === customField.value);
+      if (optionByIndex && optionByIndex.name && optionByIndex.name.toLowerCase() === 'yes') {
+          return true;
+      }
+      const optionById = customField.typeConfig.options.find((opt: any) => opt.id === customField.value);
+      if (optionById && optionById.name && optionById.name.toLowerCase() === 'yes') {
+           return true;
+      }
+  }
+  
+  if (typeof customField.value === 'string' && customField.value.toLowerCase() === 'yes') {
+      return true;
+  }
+  if (Array.isArray(customField.value)) {
+      return customField.value.some(v => typeof v === 'string' && v.toLowerCase() === 'yes');
+  }
+  if (customField.type === 'checkbox' && customField.value === true) {
+      return true;
+  }
+
+  return false;
+}
+
 function groupTasksByAssignee(tasks: NormalizedTask[]): Map<string, number> {
   const map = new Map<string, number>();
   for (const task of tasks) {
@@ -209,16 +237,18 @@ interface MemberComparisonData {
   name: string;
   totalTasks: number;
   delayedTasks: number;
+  actualDelayedTasks: number;
   completionRate: number; // percentage
+  efficiencyRate: number; // percentage
 }
 
 function buildMemberComparison(allTasks: NormalizedTask[], teamMemberUsernames?: string[]): MemberComparisonData[] {
-  const memberMap = new Map<string, { total: NormalizedTask[]; delayed: NormalizedTask[] }>();
+  const memberMap = new Map<string, { total: NormalizedTask[]; delayed: NormalizedTask[]; actualDelayed: NormalizedTask[] }>();
 
   // Pre-initialize team members so they appear even with 0 tasks
   if (teamMemberUsernames && teamMemberUsernames.length > 0) {
     for (const name of teamMemberUsernames) {
-      memberMap.set(name, { total: [], delayed: [] });
+      memberMap.set(name, { total: [], delayed: [], actualDelayed: [] });
     }
   }
 
@@ -232,10 +262,11 @@ function buildMemberComparison(allTasks: NormalizedTask[], teamMemberUsernames?:
       if (teamMemberUsernames && teamMemberUsernames.length > 0 && !teamMemberUsernames.includes(name)) {
         continue;
       }
-      if (!memberMap.has(name)) memberMap.set(name, { total: [], delayed: [] });
+      if (!memberMap.has(name)) memberMap.set(name, { total: [], delayed: [], actualDelayed: [] });
       const entry = memberMap.get(name)!;
       entry.total.push(task);
       if (isTaskDelayed(task)) entry.delayed.push(task);
+      if (isTaskActuallyDelayed(task)) entry.actualDelayed.push(task);
     }
   }
 
@@ -245,11 +276,18 @@ function buildMemberComparison(allTasks: NormalizedTask[], teamMemberUsernames?:
       const completed = data.total.filter(t =>
         doneStatuses.includes(t.status.toLowerCase()) || t.statusType === 'closed'
       ).length;
+      
+      const total = data.total.length;
+      const actualDel = data.actualDelayed.length;
+      const efficiencyRate = total > 0 ? Math.round(((total - actualDel) / total) * 100) : 0;
+
       return {
         name,
-        totalTasks: data.total.length,
+        totalTasks: total,
         delayedTasks: data.delayed.length,
-        completionRate: data.total.length > 0 ? Math.round((completed / data.total.length) * 100) : 0,
+        actualDelayedTasks: actualDel,
+        completionRate: total > 0 ? Math.round((completed / total) * 100) : 0,
+        efficiencyRate,
       };
     })
     .sort((a, b) => b.totalTasks - a.totalTasks);
@@ -471,8 +509,6 @@ function ComparisonChart({
         const m = data.find(d => d.name === highlightedMember);
         if (!m) return null;
         const rank = data.findIndex(d => d.name === highlightedMember) + 1;
-        const avgTotal = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.totalTasks, 0) / data.length) : 0;
-        const avgDelayed = data.length > 0 ? Math.round(data.reduce((s, d) => s + d.delayedTasks, 0) / data.length) : 0;
 
         return (
           <div style={{
@@ -496,8 +532,8 @@ function ComparisonChart({
               {[
                 { label: 'Rank', value: `#${rank} of ${data.length}`, color: 'var(--text-primary)' },
                 { label: 'Completion', value: `${m.completionRate}%`, color: m.completionRate >= 70 ? '#3fb950' : m.completionRate >= 40 ? '#d29922' : '#f85149' },
-                { label: 'vs Avg Tasks', value: m.totalTasks >= avgTotal ? `+${m.totalTasks - avgTotal}` : `${m.totalTasks - avgTotal}`, color: 'var(--text-secondary)' },
-                { label: 'vs Avg Delayed', value: m.delayedTasks <= avgDelayed ? `${m.delayedTasks - avgDelayed}` : `+${m.delayedTasks - avgDelayed}`, color: m.delayedTasks <= avgDelayed ? '#3fb950' : '#f85149' },
+                { label: 'Efficiency %', value: `${m.efficiencyRate}%`, color: m.efficiencyRate >= 80 ? '#3fb950' : m.efficiencyRate >= 50 ? '#d29922' : '#f85149' },
+                { label: 'Actual Delayed', value: `${m.actualDelayedTasks}`, color: m.actualDelayedTasks === 0 ? '#3fb950' : '#f85149' },
               ].map(stat => (
                 <div key={stat.label} style={{
                   padding: '6px 8px',
@@ -1198,6 +1234,9 @@ export default function PieChartView() {
   const delayedTasks = useMemo(() => filteredTasks.filter(isTaskDelayed), [filteredTasks]);
   const delayedSlices = useMemo(() => buildSlices(groupTasksByAssignee(delayedTasks)), [delayedTasks]);
 
+  const actualDelayedTasks = useMemo(() => filteredTasks.filter(isTaskActuallyDelayed), [filteredTasks]);
+  const actualDelayedSlices = useMemo(() => buildSlices(groupTasksByAssignee(actualDelayedTasks)), [actualDelayedTasks]);
+
   // Separate filtered list for status chart — uses due date instead of completion date
   const statusFilteredTasks = useMemo(() => {
     let result = allTasks;
@@ -1432,11 +1471,12 @@ export default function PieChartView() {
         <div className="pie-filter-summary">
           <span className="pie-filter-badge">{filteredTasks.length} tasks</span>
           <span className="pie-filter-badge pie-filter-badge-delayed">{delayedTasks.length} delayed</span>
+          <span className="pie-filter-badge pie-filter-badge-delayed" style={{ marginLeft: '8px' }}>{actualDelayedTasks.length} actual delayed</span>
         </div>
       </div>
 
-      {/* Pie Charts */}
-      <div className="pie-charts-row">
+      {/* Pie Charts Grid (2x2) */}
+      <div className="pie-charts-row" style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '24px' }}>
         <PieChart
           slices={totalSlices}
           title="Total Tasks"
@@ -1453,10 +1493,14 @@ export default function PieChartView() {
           chartType="delayed"
           allFilteredTasks={filteredTasks}
         />
-      </div>
-
-      {/* Status Distribution Pie Chart - full width below */}
-      <div className="pie-charts-row" style={{ justifyContent: 'center' }}>
+        <PieChart
+          slices={actualDelayedSlices}
+          title="Actual Delayed"
+          totalCount={actualDelayedTasks.length}
+          filteredTasks={actualDelayedTasks}
+          chartType="delayed"
+          allFilteredTasks={filteredTasks}
+        />
         <PieChart
           slices={statusSlices}
           title="Status Distribution"

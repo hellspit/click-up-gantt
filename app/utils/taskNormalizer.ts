@@ -25,6 +25,7 @@ export function normalizeTask(raw: any): NormalizedTask {
       name: cf.name,
       type: cf.type,
       value: cf.value,
+      typeConfig: cf.type_config,
     }));
 
   return {

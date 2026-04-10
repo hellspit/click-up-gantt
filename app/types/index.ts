@@ -11,6 +11,7 @@ export interface CustomField {
   name: string;
   type: string;
   value: any;
+  typeConfig?: any;
 }
 
 export interface NormalizedTask {
