@@ -9,11 +9,262 @@ const VIEW_TABS = [
   { key: 'status' as const, icon: '📈', label: 'Status' },
 ];
 
+// Status color mapping for common ClickUp statuses
+const STATUS_COLORS: Record<string, string> = {
+  'complete': '#3fb950',
+  'done': '#3fb950',
+  'closed': '#8b949e',
+  'in progress': '#e3b341',
+  'in review': '#bc8cff',
+  'review': '#bc8cff',
+  'to do': '#58a6ff',
+  'open': '#58a6ff',
+  'open/to do': '#58a6ff',
+};
+
+function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
+  const individualFilter = useTaskStore(s => s.individualFilter);
+  const availableStatuses = useTaskStore(s => s.availableStatuses);
+  const applyIndividualFilter = useTaskStore(s => s.applyIndividualFilter);
+  const clearIndividualFilter = useTaskStore(s => s.clearIndividualFilter);
+
+  const [dateFrom, setDateFrom] = useState(individualFilter.dateFrom || '');
+  const [dateTo, setDateTo] = useState(individualFilter.dateTo || '');
+  const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(individualFilter.statusFilter));
+
+  const isAnyFilter = dateFrom || dateTo || statusFilter.size > 0;
+
+  const toggleStatus = (s: string) => {
+    const next = new Set(statusFilter);
+    if (next.has(s)) next.delete(s);
+    else next.add(s);
+    setStatusFilter(next);
+  };
+
+  const handleApply = () => {
+    applyIndividualFilter({
+      dateFrom: dateFrom || null,
+      dateTo: dateTo || null,
+      statusFilter,
+    });
+    onClose();
+  };
+
+  const handleClear = () => {
+    setDateFrom('');
+    setDateTo('');
+    setStatusFilter(new Set());
+    clearIndividualFilter();
+    onClose();
+  };
+
+  const getStatusColor = (s: string) => STATUS_COLORS[s] || '#58a6ff';
+
+  return (
+    <div
+      style={{
+        position: 'absolute',
+        top: '100%',
+        right: '0',
+        marginTop: '8px',
+        width: '320px',
+        background: 'var(--bg-elevated)',
+        border: '1px solid var(--border-secondary)',
+        borderRadius: '12px',
+        boxShadow: '0 20px 40px rgba(0,0,0,0.6), 0 0 0 1px rgba(255,255,255,0.05) inset',
+        zIndex: 9999,
+        overflow: 'hidden',
+        animation: 'fadeIn 0.15s ease',
+        backdropFilter: 'blur(10px)',
+      }}
+    >
+      {/* Header */}
+      <div
+        style={{
+          padding: '10px 14px',
+          borderBottom: '1px solid var(--border-primary)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+        }}
+      >
+        <span style={{ fontSize: '11px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.8px', color: 'var(--text-tertiary)' }}>
+          Filters
+        </span>
+        {isAnyFilter && (
+          <span
+            onClick={handleClear}
+            style={{ fontSize: '10px', color: '#f85149', cursor: 'pointer', fontWeight: 600 }}
+          >
+            Clear All
+          </span>
+        )}
+      </div>
+
+      {/* Date Range Section */}
+      <div style={{ padding: '16px', borderBottom: '1px solid var(--border-primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '14px' }}>📅</span>
+          <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Date Range</span>
+        </div>
+        <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <label style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>From</label>
+            <input
+              type="date"
+              value={dateFrom}
+              onChange={e => setDateFrom(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border-primary)',
+                borderRadius: '8px',
+                color: 'var(--text-primary)',
+                fontSize: '12px',
+                fontFamily: 'var(--font-sans)',
+                outline: 'none',
+                colorScheme: 'dark',
+                transition: 'all 0.2s',
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = 'var(--status-todo)')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border-primary)')}
+            />
+          </div>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', paddingTop: '16px' }}>→</span>
+          <div style={{ flex: 1, position: 'relative' }}>
+            <label style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>To</label>
+            <input
+              type="date"
+              value={dateTo}
+              onChange={e => setDateTo(e.target.value)}
+              style={{
+                width: '100%',
+                padding: '8px 10px',
+                background: 'var(--bg-tertiary)',
+                border: '1px solid var(--border-primary)',
+                borderRadius: '8px',
+                color: 'var(--text-primary)',
+                fontSize: '12px',
+                fontFamily: 'var(--font-sans)',
+                outline: 'none',
+                colorScheme: 'dark',
+                transition: 'all 0.2s',
+              }}
+              onFocus={e => (e.currentTarget.style.borderColor = 'var(--status-todo)')}
+              onBlur={e => (e.currentTarget.style.borderColor = 'var(--border-primary)')}
+            />
+          </div>
+        </div>
+      </div>
+
+      {/* Status Section */}
+      <div style={{ padding: '16px' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '14px' }}>🏷️</span>
+          <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Task Status</span>
+        </div>
+        {availableStatuses.length === 0 ? (
+          <div style={{ fontSize: '12px', color: 'var(--text-muted)', fontStyle: 'italic', padding: '8px 0' }}>
+            Generate tasks first to see statuses
+          </div>
+        ) : (
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+            {availableStatuses.map(s => {
+              const active = statusFilter.has(s);
+              const color = getStatusColor(s);
+              return (
+                <div
+                  key={s}
+                  onClick={() => toggleStatus(s)}
+                  style={{
+                    display: 'flex',
+                    alignItems: 'center',
+                    gap: '6px',
+                    padding: '6px 12px',
+                    borderRadius: '20px',
+                    fontSize: '11px',
+                    fontWeight: active ? 600 : 500,
+                    cursor: 'pointer',
+                    transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                    background: active ? `${color}20` : 'var(--bg-tertiary)',
+                    border: active ? `1px solid ${color}` : '1px solid var(--border-primary)',
+                    color: active ? color : 'var(--text-secondary)',
+                    textTransform: 'capitalize',
+                    boxShadow: active ? `0 0 0 1px ${color}40, 0 2px 8px ${color}20` : 'none',
+                  }}
+                  onMouseEnter={e => {
+                    if (!active) {
+                      e.currentTarget.style.borderColor = 'var(--border-secondary)';
+                      e.currentTarget.style.background = 'var(--bg-hover)';
+                    }
+                  }}
+                  onMouseLeave={e => {
+                    if (!active) {
+                      e.currentTarget.style.borderColor = 'var(--border-primary)';
+                      e.currentTarget.style.background = 'var(--bg-tertiary)';
+                    }
+                  }}
+                >
+                  <div style={{
+                    width: '8px',
+                    height: '8px',
+                    borderRadius: '50%',
+                    background: color,
+                    flexShrink: 0,
+                    boxShadow: active ? `0 0 4px ${color}` : 'none',
+                  }} />
+                  {s}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* Apply button */}
+      <div style={{ padding: '16px', borderTop: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
+        <div
+          onClick={handleApply}
+          style={{
+            width: '100%',
+            padding: '10px 0',
+            background: 'linear-gradient(135deg, var(--status-open) 0%, var(--status-todo) 100%)',
+            color: '#fff',
+            border: 'none',
+            borderRadius: '8px',
+            fontSize: '12px',
+            fontWeight: 700,
+            textAlign: 'center',
+            cursor: 'pointer',
+            textTransform: 'uppercase',
+            letterSpacing: '1px',
+            transition: 'all 0.2s',
+            boxShadow: '0 4px 12px rgba(88, 166, 255, 0.3)',
+          }}
+          onMouseEnter={e => {
+            e.currentTarget.style.transform = 'translateY(-1px)';
+            e.currentTarget.style.boxShadow = '0 6px 16px rgba(88, 166, 255, 0.4)';
+          }}
+          onMouseLeave={e => {
+            e.currentTarget.style.transform = 'translateY(0)';
+            e.currentTarget.style.boxShadow = '0 4px 12px rgba(88, 166, 255, 0.3)';
+          }}
+        >
+          Apply Filters
+        </div>
+      </div>
+    </div>
+  );
+}
+
 export default function Header() {
-  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, activeView, mode, activeTeamKey, fetchMembers, fetchTasks, setSelectedUser, setActiveView } = useTaskStore();
+  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, fetchMembers, fetchTasks, setSelectedUser, setActiveView } = useTaskStore();
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
+  const [showFilter, setShowFilter] = useState(false);
   const wrapperRef = useRef<HTMLDivElement>(null);
+  const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
 
@@ -24,6 +275,15 @@ export default function Header() {
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
   }, []);
+
+  // Close filter on outside click
+  useEffect(() => {
+    const handler = (e: MouseEvent) => {
+      if (filterRef.current && !filterRef.current.contains(e.target as Node)) setShowFilter(false);
+    };
+    if (showFilter) document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [showFilter]);
 
   const filtered = members.filter(m =>
     m.username.toLowerCase().includes(query.toLowerCase()) ||
@@ -55,6 +315,8 @@ export default function Header() {
   };
 
   const isTeamMode = mode === 'team';
+  const hasIndividualFilter = individualFilter.dateFrom || individualFilter.dateTo || individualFilter.statusFilter.size > 0;
+  const hasTasks = tasks.length > 0 || noDateTasks.length > 0;
 
   return (
     <>
@@ -110,6 +372,49 @@ export default function Header() {
           <button className="btn-generate" onClick={handleGenerate} disabled={!selectedUserId || loading}>
             {loading ? 'Loading...' : 'Generate'}
           </button>
+
+          {/* Filter button */}
+          {hasTasks && (
+            <div ref={filterRef} style={{ position: 'relative' }}>
+              <div
+                onClick={() => setShowFilter(!showFilter)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '7px 14px',
+                  background: hasIndividualFilter ? 'rgba(88, 166, 255, 0.1)' : 'transparent',
+                  border: hasIndividualFilter ? '1px solid var(--status-todo)' : '1px solid var(--border-secondary)',
+                  borderRadius: '6px',
+                  fontSize: '12px',
+                  fontWeight: 600,
+                  color: hasIndividualFilter ? 'var(--text-primary)' : 'var(--text-secondary)',
+                  cursor: 'pointer',
+                  whiteSpace: 'nowrap',
+                  transition: 'all 0.2s',
+                }}
+              >
+                🔍 Filter
+                {hasIndividualFilter && (
+                  <span
+                    style={{
+                      background: 'var(--status-todo)',
+                      color: '#fff',
+                      fontSize: '9px',
+                      fontWeight: 700,
+                      padding: '1px 6px',
+                      borderRadius: '8px',
+                      minWidth: '16px',
+                      textAlign: 'center',
+                    }}
+                  >
+                    {(individualFilter.dateFrom || individualFilter.dateTo ? 1 : 0) + (individualFilter.statusFilter.size > 0 ? 1 : 0)}
+                  </span>
+                )}
+              </div>
+              {showFilter && <IndividualFilterDropdown onClose={() => setShowFilter(false)} />}
+            </div>
+          )}
 
           <div className="header-spacer" />
 

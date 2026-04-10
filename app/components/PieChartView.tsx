@@ -271,7 +271,7 @@ function ComparisonChart({
   const maxTotal = Math.max(...data.map(d => d.totalTasks), 1);
   const barHeight = 28;
   const rowGap = 6;
-  const labelWidth = 110;
+  const labelWidth = 140;
   const chartLeftPad = 16;
   const chartRightPad = 50;
   const topPad = 50;
@@ -405,7 +405,7 @@ function ComparisonChart({
                 fontWeight={isHighlighted ? 700 : 500}
                 fontFamily="var(--font-sans)"
               >
-                {member.name.length > 14 ? member.name.slice(0, 13) + '…' : member.name}
+                {member.name.length > 20 ? member.name.slice(0, 19) + '…' : member.name}
               </text>
 
               {/* Total bar (background) */}
@@ -931,6 +931,7 @@ function PieChart({
   filteredTasks,
   chartType,
   allFilteredTasks,
+  taskFilterFn,
 }: {
   slices: SliceData[];
   title: string;
@@ -938,11 +939,12 @@ function PieChart({
   filteredTasks: NormalizedTask[];
   chartType: 'total' | 'delayed';
   allFilteredTasks: NormalizedTask[];
+  taskFilterFn?: (tasks: NormalizedTask[], sliceLabel: string) => NormalizedTask[];
 }) {
   const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
   const [selectedMember, setSelectedMember] = useState<{ name: string; color: string } | null>(null);
 
-  const svgW = 650;
+  const svgW = 800;
   const svgH = 450;
   const cx = svgW / 2;
   const cy = svgH / 2 + 5;
@@ -990,14 +992,17 @@ function PieChart({
     );
   }, [paths, cx, cy, radius]);
 
-  // Get tasks for the selected member
+  // Get tasks for the selected slice
   const selectedMemberTasks = useMemo(() => {
     if (!selectedMember) return [];
+    if (taskFilterFn) {
+      return taskFilterFn(filteredTasks, selectedMember.name);
+    }
     return filteredTasks.filter(t =>
       t.assignees.some(a => a.username === selectedMember.name) ||
       (selectedMember.name === 'Unassigned' && t.assignees.length === 0)
     );
-  }, [selectedMember, filteredTasks]);
+  }, [selectedMember, filteredTasks, taskFilterFn]);
 
   const handleSliceClick = (i: number) => {
     const slice = slices[i];
@@ -1026,7 +1031,7 @@ function PieChart({
         {title}
         <span className="pie-chart-count">{totalCount}</span>
       </h3>
-      <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="pie-chart-svg">
+      <svg width="100%" viewBox={`0 0 ${svgW} ${svgH}`} className="pie-chart-svg" style={{ overflow: 'visible' }}>
         {/* Pie slices */}
         {slices.length === 1 ? (
           <circle
@@ -1178,7 +1183,7 @@ export default function PieChartView() {
     const cutoff = getDurationCutoff(duration);
     if (cutoff) {
       const now = new Date();
-      result = result.filter(t => t.endDate && t.endDate >= cutoff && t.endDate <= now);
+      result = result.filter(t => t.dateCompleted && t.dateCompleted >= cutoff && t.dateCompleted <= now);
     }
     if (folderFilter !== 'all') {
       result = result.filter(t => t.folder.name === folderFilter);
@@ -1192,6 +1197,72 @@ export default function PieChartView() {
   const totalSlices = useMemo(() => buildSlices(groupTasksByAssignee(filteredTasks)), [filteredTasks]);
   const delayedTasks = useMemo(() => filteredTasks.filter(isTaskDelayed), [filteredTasks]);
   const delayedSlices = useMemo(() => buildSlices(groupTasksByAssignee(delayedTasks)), [delayedTasks]);
+
+  // Separate filtered list for status chart — uses due date instead of completion date
+  const statusFilteredTasks = useMemo(() => {
+    let result = allTasks;
+    const cutoff = getDurationCutoff(duration);
+    if (cutoff) {
+      result = result.filter(t => t.endDate && t.endDate >= cutoff);
+    }
+    if (folderFilter !== 'all') {
+      result = result.filter(t => t.folder.name === folderFilter);
+    }
+    if (memberFilter.size > 0) {
+      result = result.filter(t => t.assignees.some(a => memberFilter.has(a.username)));
+    }
+    return result;
+  }, [allTasks, duration, folderFilter, memberFilter]);
+
+  // Status distribution slices — 4 categories
+  const statusSlices = useMemo(() => {
+    const STATUS_CATEGORIES: { label: string; color: string }[] = [
+      { label: 'Completed', color: '#3fb950' },
+      { label: 'In Progress', color: '#d29922' },
+      { label: 'To Do', color: '#58a6ff' },
+      { label: 'Overdue', color: '#f85149' },
+    ];
+
+    const counts = new Map<string, number>();
+    for (const cat of STATUS_CATEGORIES) counts.set(cat.label, 0);
+
+    const now = new Date();
+    for (const task of statusFilteredTasks) {
+      const s = task.status.toLowerCase();
+      const isDone = ['complete', 'done', 'resolved', 'closed'].some(k => s.includes(k)) || task.statusType === 'closed';
+      const isInProgress = ['in progress', 'doing', 'working', 'active', 'review', 'in review'].some(k => s.includes(k));
+      const isOverdue = !isDone && task.endDate && task.endDate < now;
+
+      if (isOverdue) {
+        counts.set('Overdue', (counts.get('Overdue') || 0) + 1);
+      } else if (isDone) {
+        counts.set('Completed', (counts.get('Completed') || 0) + 1);
+      } else if (isInProgress) {
+        counts.set('In Progress', (counts.get('In Progress') || 0) + 1);
+      } else {
+        counts.set('To Do', (counts.get('To Do') || 0) + 1);
+      }
+    }
+
+    // Remove zero-count entries
+    for (const [key, val] of counts) {
+      if (val === 0) counts.delete(key);
+    }
+    const total = Array.from(counts.values()).reduce((s, v) => s + v, 0);
+    if (total === 0) return [];
+
+    const slices: SliceData[] = [];
+    for (const [label, value] of counts) {
+      const cat = STATUS_CATEGORIES.find(c => c.label === label);
+      slices.push({
+        label,
+        value,
+        percentage: parseFloat(((value / total) * 100).toFixed(2)),
+        color: cat ? cat.color : '#6e7681',
+      });
+    }
+    return slices.sort((a, b) => b.value - a.value);
+  }, [statusFilteredTasks]);
 
   const DURATION_OPTIONS: { value: DurationFilter; label: string }[] = [
     { value: 'all', label: 'All Time' },
@@ -1215,10 +1286,10 @@ export default function PieChartView() {
         </div>
 
         <div className="pie-filter-group">
-          <label className="pie-filter-label">Folder</label>
+          <label className="pie-filter-label">Project</label>
           <select className="pie-filter-select" value={folderFilter}
             onChange={e => setFolderFilter(e.target.value)}>
-            <option value="all">All Folders</option>
+            <option value="all">All Projects</option>
             {folders.map(f => (
               <option key={f} value={f}>{f}</option>
             ))}
@@ -1381,6 +1452,35 @@ export default function PieChartView() {
           filteredTasks={delayedTasks}
           chartType="delayed"
           allFilteredTasks={filteredTasks}
+        />
+      </div>
+
+      {/* Status Distribution Pie Chart - full width below */}
+      <div className="pie-charts-row" style={{ justifyContent: 'center' }}>
+        <PieChart
+          slices={statusSlices}
+          title="Status Distribution"
+          totalCount={statusFilteredTasks.length}
+          filteredTasks={statusFilteredTasks}
+          chartType="total"
+          allFilteredTasks={statusFilteredTasks}
+          taskFilterFn={(tasks, sliceLabel) => {
+            const now = new Date();
+            return tasks.filter(t => {
+              const s = t.status.toLowerCase();
+              const isDone = ['complete', 'done', 'resolved', 'closed'].some(k => s.includes(k)) || t.statusType === 'closed';
+              const isInProgress = ['in progress', 'doing', 'working', 'active', 'review', 'in review'].some(k => s.includes(k));
+              const isOverdue = !isDone && t.endDate && t.endDate < now;
+
+              switch (sliceLabel) {
+                case 'Overdue': return !!isOverdue;
+                case 'Completed': return isDone && !isOverdue;
+                case 'In Progress': return isInProgress && !isDone && !isOverdue;
+                case 'To Do': return !isDone && !isInProgress && !isOverdue;
+                default: return false;
+              }
+            });
+          }}
         />
       </div>
     </div>

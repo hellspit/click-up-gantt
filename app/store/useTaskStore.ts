@@ -27,6 +27,12 @@ interface ResolvedMember {
   profilePicture: string | null;
 }
 
+interface IndividualFilter {
+  dateFrom: string | null; // ISO date string YYYY-MM-DD
+  dateTo: string | null;
+  statusFilter: Set<string>; // empty = show all
+}
+
 interface TaskStore {
   // Mode
   mode: AppMode;
@@ -38,11 +44,17 @@ interface TaskStore {
   selectedUserId: string | null;
   selectedUserName: string;
 
-  // Task data (visible — may be filtered in team mode)
+  // Task data (visible — may be filtered)
   tasks: NormalizedTask[];
   noDateTasks: NormalizedTask[];
   treeRows: TreeRow[];
   timelineConfig: TimelineConfig | null;
+
+  // Individual unfiltered backup
+  allIndividualTasks: NormalizedTask[];
+  allIndividualNoDateTasks: NormalizedTask[];
+  individualFilter: IndividualFilter;
+  availableStatuses: string[]; // unique statuses from fetched tasks
 
   // Team unfiltered backup
   allTeamTasks: NormalizedTask[];
@@ -68,6 +80,8 @@ interface TaskStore {
   fetchMembers: () => Promise<void>;
   fetchTasks: () => Promise<void>;
   setSelectedUser: (id: string, name: string) => void;
+  applyIndividualFilter: (filter: Partial<IndividualFilter>) => void;
+  clearIndividualFilter: () => void;
 
   // Team actions
   fetchTeamTasks: (teamKey: string) => Promise<void>;
@@ -105,6 +119,61 @@ function filterTasksByMembers(allTasks: NormalizedTask[], filterIds: Set<number>
   return allTasks.filter(t =>
     t.assignees.some(a => filterIds.has(a.id))
   );
+}
+
+function filterTasksIndividual(
+  allTasks: NormalizedTask[],
+  filter: IndividualFilter
+): NormalizedTask[] {
+  let result = allTasks;
+
+  // Date range filter — check if task overlaps with the filter range
+  if (filter.dateFrom || filter.dateTo) {
+    const from = filter.dateFrom ? new Date(filter.dateFrom) : null;
+    const to = filter.dateTo ? new Date(filter.dateTo + 'T23:59:59') : null;
+    result = result.filter(t => {
+      const taskStart = t.startDate;
+      const taskEnd = t.endDate;
+      // For dated tasks, check overlap
+      if (taskStart && taskEnd) {
+        if (from && taskEnd < from) return false;
+        if (to && taskStart > to) return false;
+        return true;
+      }
+      // For undated tasks with dateCreated, check if created in range
+      if (t.dateCreated) {
+        if (from && t.dateCreated < from) return false;
+        if (to && t.dateCreated > to) return false;
+        return true;
+      }
+      return true;
+    });
+  }
+
+  // Status filter
+  if (filter.statusFilter.size > 0) {
+    result = result.filter(t => filter.statusFilter.has(t.status.toLowerCase()));
+  }
+
+  return result;
+}
+
+function extractUniqueStatuses(tasks: NormalizedTask[]): string[] {
+  // Always include standard statuses so the user has the full array of options
+  const set = new Set<string>(['open', 'to do', 'in progress', 'review', 'done', 'closed']);
+  tasks.forEach(t => set.add(t.status.toLowerCase()));
+  
+  // Order them logically from creation to completion
+  const standardOrder = ['open', 'to do', 'open/to do', 'in progress', 'review', 'in review', 'done', 'complete', 'closed'];
+  
+  return Array.from(set).sort((a, b) => {
+    const idxA = standardOrder.indexOf(a);
+    const idxB = standardOrder.indexOf(b);
+    if (idxA !== -1 && idxB !== -1) return idxA - idxB;
+    if (idxA !== -1) return -1;
+    if (idxB !== -1) return 1;
+    return a.localeCompare(b); // Alphabetical for any custom statuses
+  });
 }
 
 /**
@@ -214,6 +283,12 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   treeRows: [],
   timelineConfig: null,
 
+  // Individual unfiltered backup
+  allIndividualTasks: [],
+  allIndividualNoDateTasks: [],
+  individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set() },
+  availableStatuses: [],
+
   // Team unfiltered backup
   allTeamTasks: [],
   allTeamNoDateTasks: [],
@@ -268,9 +343,14 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       set({ loadingProgress: 'Processing and organizing tasks...' });
       const data = await res.json();
       const processed = processTaskData(data.tasks || []);
+      const allStatuses = extractUniqueStatuses([...processed.tasks, ...processed.noDateTasks]);
 
       set({
         ...processed,
+        allIndividualTasks: processed.tasks,
+        allIndividualNoDateTasks: processed.noDateTasks,
+        availableStatuses: allStatuses,
+        individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set() },
         loading: false,
         loadingProgress: '',
         collapsedGroups: new Set(),
@@ -472,6 +552,35 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   setSelectedUser: (id: string, name: string) => {
     set({ selectedUserId: id, selectedUserName: name });
+  },
+
+  applyIndividualFilter: (partial: Partial<IndividualFilter>) => {
+    const { individualFilter, allIndividualTasks, allIndividualNoDateTasks } = get();
+    const newFilter: IndividualFilter = {
+      dateFrom: partial.dateFrom !== undefined ? partial.dateFrom : individualFilter.dateFrom,
+      dateTo: partial.dateTo !== undefined ? partial.dateTo : individualFilter.dateTo,
+      statusFilter: partial.statusFilter !== undefined ? partial.statusFilter : individualFilter.statusFilter,
+    };
+
+    const filteredDated = filterTasksIndividual(allIndividualTasks, newFilter);
+    const filteredUndated = filterTasksIndividual(allIndividualNoDateTasks, newFilter);
+    const processed = processNormalizedTasks(filteredDated, filteredUndated);
+
+    set({
+      individualFilter: newFilter,
+      ...processed,
+      collapsedGroups: new Set(),
+    });
+  },
+
+  clearIndividualFilter: () => {
+    const { allIndividualTasks, allIndividualNoDateTasks } = get();
+    const processed = processNormalizedTasks(allIndividualTasks, allIndividualNoDateTasks);
+    set({
+      individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set() },
+      ...processed,
+      collapsedGroups: new Set(),
+    });
   },
 
   toggleGroup: (groupId: string) => {
