@@ -1,6 +1,6 @@
 'use client';
 
-import { TreeRow, TimelineConfig } from '../types';
+import { TreeRow, TimelineConfig, CustomField } from '../types';
 import { dateToPx, durationToPx, formatShortDate, getDayOfWeekLetter, isSameDay, isWeekend } from '../utils/dateUtils';
 
 interface Props {
@@ -8,6 +8,24 @@ interface Props {
   rows: TreeRow[];
   config: TimelineConfig;
   rowHeight: number;
+}
+
+const PLANNED_START_NAMES = ['planned start date', 'planned start'];
+const PLANNED_DUE_NAMES = ['planned due date', 'planned due'];
+
+function findCustomField(fields: CustomField[], names: string[]): CustomField | undefined {
+  return fields.find(cf => names.includes(cf.name.toLowerCase()) && cf.value !== null && cf.value !== undefined && cf.value !== '');
+}
+
+function formatPlannedDate(cf: CustomField): string {
+  const ts = Number(cf.value);
+  if (!isNaN(ts) && ts > 1000000000000) {
+    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+  }
+  if (!isNaN(ts) && ts > 1000000000) {
+    return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+  }
+  return String(cf.value);
 }
 
 function getStatusColor(status: string, color: string): string {
@@ -59,7 +77,7 @@ function renderHeader(startDate: Date, totalDays: number, pxPerDay: number, tota
     if (m !== currentMonth) {
       if (currentMonth !== -1) {
         months.push({
-          label: `${['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'][currentMonth]} ${days[i-1].getDate()}`,
+          label: `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][currentMonth]} ${days[i - 1].getDate()}`,
           x: monthStart * pxPerDay,
           width: (i - monthStart) * pxPerDay,
         });
@@ -69,9 +87,9 @@ function renderHeader(startDate: Date, totalDays: number, pxPerDay: number, tota
     }
   }
   if (currentMonth !== -1) {
-    const mNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const mNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
     months.push({
-      label: `${mNames[currentMonth]} ${days[days.length-1].getDate()}`,
+      label: `${mNames[currentMonth]} ${days[days.length - 1].getDate()}`,
       x: monthStart * pxPerDay,
       width: (days.length - monthStart) * pxPerDay,
     });
@@ -150,18 +168,43 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
       {rows.map((row, i) => {
         if (row.type !== 'task') return null;
         const t = row.task;
+        const y = i * rowHeight + 8;
+        const h = rowHeight - 16;
+
         if (!t.startDate || !t.endDate) return null;
 
         const x = dateToPx(t.startDate, startDate, pxPerDay);
         const w = durationToPx(t.startDate, t.endDate, pxPerDay);
-        const y = i * rowHeight + 8;
-        const h = rowHeight - 16;
         const color = getStatusColor(t.status, t.statusColor);
         const label = getStatusLabel(t.status);
-        const dateLabel = formatShortDate(t.endDate);
+
+        // Extract planned dates from custom fields
+        const plannedStart = findCustomField(t.customFields, PLANNED_START_NAMES);
+        const plannedDue = findCustomField(t.customFields, PLANNED_DUE_NAMES);
+        const hasPlannedDates = plannedStart || plannedDue;
+
+        let plannedLabel = 'Planned dates not present';
+        if (hasPlannedDates) {
+          const startStr = plannedStart ? formatPlannedDate(plannedStart) : '—';
+          const dueStr = plannedDue ? formatPlannedDate(plannedDue) : '—';
+          plannedLabel = `${startStr} - ${dueStr}`;
+        }
+        const labelWidth = plannedLabel.length * 6;
 
         return (
           <g key={t.id + '-' + i}>
+            {/* Planned date range label BEFORE bar */}
+            <text
+              x={x - 4}
+              y={y + h / 2 + 4}
+              fill={hasPlannedDates ? '#8b949e' : '#6e7681'}
+              fontSize={10}
+              fontStyle={hasPlannedDates ? 'normal' : 'italic'}
+              fontFamily="var(--font-sans)"
+              textAnchor="end"
+            >
+              {plannedLabel}
+            </text>
             {/* Bar shadow */}
             <rect x={x + 1} y={y + 1} width={w} height={h} rx={4} fill="rgba(0,0,0,0.3)" />
             {/* Bar */}
@@ -172,9 +215,15 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
                 {label}
               </text>
             )}
-            {/* Date label after bar */}
+            {/* Actual start date - due date label after bar */}
             <text x={x + w + 6} y={y + h / 2 + 4} fill="#8b949e" fontSize={10} fontFamily="var(--font-sans)">
-              {dateLabel}
+              {t.startDate && t.endDate
+                ? `${formatShortDate(t.startDate)} - ${formatShortDate(t.endDate)}`
+                : t.startDate
+                ? formatShortDate(t.startDate)
+                : t.endDate
+                ? formatShortDate(t.endDate)
+                : ''}
             </text>
           </g>
         );

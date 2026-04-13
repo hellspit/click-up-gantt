@@ -1494,14 +1494,6 @@ export default function PieChartView() {
           allFilteredTasks={filteredTasks}
         />
         <PieChart
-          slices={actualDelayedSlices}
-          title="Actual Delayed"
-          totalCount={actualDelayedTasks.length}
-          filteredTasks={actualDelayedTasks}
-          chartType="delayed"
-          allFilteredTasks={filteredTasks}
-        />
-        <PieChart
           slices={statusSlices}
           title="Status Distribution"
           totalCount={statusFilteredTasks.length}
@@ -1525,6 +1517,14 @@ export default function PieChartView() {
               }
             });
           }}
+        />
+        <PieChart
+          slices={actualDelayedSlices}
+          title="Actual Delayed"
+          totalCount={actualDelayedTasks.length}
+          filteredTasks={actualDelayedTasks}
+          chartType="delayed"
+          allFilteredTasks={filteredTasks}
         />
       </div>
     </div>
