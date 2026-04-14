@@ -251,7 +251,7 @@ export default function TaskDetailPanel() {
 
           {/* Assignees */}
           <div className="detail-field">
-            <div className="detail-field-icon">👤</div>
+            <div className="detail-field-icon">A</div>
             <div className="detail-field-label">Assignees</div>
             <div className="detail-field-value">
               {task.assignees.length > 0 ? (
@@ -275,7 +275,7 @@ export default function TaskDetailPanel() {
 
           {/* Execution Dates */}
           <div className="detail-field">
-            <div className="detail-field-icon">📅</div>
+            <div className="detail-field-icon">D</div>
             <div className="detail-field-label">Final    Dates</div>
             <div className="detail-field-value">
               <div className="detail-dates">
@@ -283,7 +283,7 @@ export default function TaskDetailPanel() {
                   <span className="detail-date-label">Start</span>
                   <span className="detail-date-val">{formatFullDate(task.startDate)}</span>
                 </div>
-                <span className="detail-date-arrow">→</span>
+                <span className="detail-date-arrow">to</span>
                 <div className="detail-date-row">
                   <span className="detail-date-label">Due</span>
                   <span className={`detail-date-val ${overdue ? 'detail-date-overdue' : ''}`}>
@@ -319,7 +319,7 @@ export default function TaskDetailPanel() {
                           <span style={{ color: '#3fb950', fontWeight: 700 }}> {delayDays}d</span>
                         )}
                         {completionDelayDays !== null && completionDelayDays > 0 && (
-                          <span style={{ color: '#f85149', fontWeight: 700 }}> +{completionDelayDays}d (completion delay)</span>
+                          <span style={{ color: '#f0883e', fontWeight: 700 }}> +{completionDelayDays}d (completion delay)</span>
                         )}
                         <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>)</span>
                       </span>
@@ -335,7 +335,7 @@ export default function TaskDetailPanel() {
           {/* ── Planned Dates (custom fields) ── */}
           {(plannedStart || plannedDue) && (
             <div className="detail-field">
-              <div className="detail-field-icon">📋</div>
+              <div className="detail-field-icon">P</div>
               <div className="detail-field-label">Planned Dates</div>
               <div className="detail-field-value">
                 <div className="detail-dates">
@@ -345,7 +345,7 @@ export default function TaskDetailPanel() {
                       {plannedStart ? formatCustomFieldValue(plannedStart) : '—'}
                     </span>
                   </div>
-                  <span className="detail-date-arrow">→</span>
+                  <span className="detail-date-arrow">to</span>
                   <div className="detail-date-row">
                     <span className="detail-date-label">Plan Due</span>
                     <span className="detail-date-val detail-date-planned">
@@ -372,7 +372,7 @@ export default function TaskDetailPanel() {
           {/* ── Date Done ── */}
           {task.dateCompleted && (
             <div className="detail-field">
-              <div className="detail-field-icon">✅</div>
+              <div className="detail-field-icon">C</div>
               <div className="detail-field-label">Date Done</div>
               <div className="detail-field-value">
                 <span style={{ color: '#3fb950', fontWeight: 600 }}>
@@ -392,7 +392,7 @@ export default function TaskDetailPanel() {
             const isEarly = delayDays < 0;
             return (
               <div className="detail-field">
-                <div className="detail-field-icon">⏱</div>
+                <div className="detail-field-icon">T</div>
                 <div className="detail-field-label">Delay Duration</div>
                 <div className="detail-field-value">
                   <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
@@ -416,7 +416,7 @@ export default function TaskDetailPanel() {
 
             return (
               <div className="detail-field" style={{ gridColumn: '1 / -1' }}>
-                <div className="detail-field-icon">📊</div>
+                <div className="detail-field-icon">DA</div>
                 <div className="detail-field-label">Delay Analysis</div>
                 <div className="detail-field-value">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
@@ -431,13 +431,13 @@ export default function TaskDetailPanel() {
                       border: '1px solid var(--border-primary)',
                     }}>
                       {[
-                        { label: 'Starting Delay', value: startingDelayDays, color: '#6e7681', icon: '⏳' },
-                        { label: 'Project Length Delay', value: projectLengthDelayDays, color: '#da3633', icon: '📏' },
-                        { label: 'Completion Delay', value: completionDelayDays, color: '#f85149', icon: '🏁' },
+                        { label: 'Starting Delay', value: startingDelayDays, color: '#6e7681' },
+                        { label: 'Project Length Delay', value: projectLengthDelayDays, color: '#da3633' },
+                        { label: 'Completion Delay', value: completionDelayDays, color: '#f0883e' },
                       ].map(d => (
                         <div key={d.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
                           <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
-                            <span>{d.icon}</span> {d.label}
+                            <span style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.color, flexShrink: 0, display: 'inline-block' }} /> {d.label}
                           </span>
                           <span style={{
                             fontSize: '12px',
@@ -468,7 +468,7 @@ export default function TaskDetailPanel() {
                           </div>
                         )}
                         {plannedDays !== null && executionDays !== null && (
-                          <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>→</span>
+                          <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>to</span>
                         )}
                         {executionDays !== null && (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
@@ -480,7 +480,7 @@ export default function TaskDetailPanel() {
                                 color: plannedDays !== null && executionDays > plannedDays ? '#f85149' : '#3fb950',
                               }}>{executionDays}d</span>
                               {completionDelayDays > 0 && (
-                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#f85149' }}>
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#f0883e' }}>
                                   +{completionDelayDays}d (completion delay)
                                 </span>
                               )}
@@ -500,21 +500,21 @@ export default function TaskDetailPanel() {
 
           {/* Duration */}
           <div className="detail-field">
-            <div className="detail-field-icon">⏱</div>
+            <div className="detail-field-icon">D</div>
             <div className="detail-field-label">Duration</div>
             <div className="detail-field-value">{getDuration(task.startDate, task.endDate)}</div>
           </div>
 
           {/* Created */}
           <div className="detail-field">
-            <div className="detail-field-icon">🕐</div>
+            <div className="detail-field-icon">CR</div>
             <div className="detail-field-label">Created</div>
             <div className="detail-field-value">{formatFullDate(task.dateCreated)}</div>
           </div>
 
           {/* Location */}
           <div className="detail-field">
-            <div className="detail-field-icon">📁</div>
+            <div className="detail-field-icon">L</div>
             <div className="detail-field-label">Location</div>
             <div className="detail-field-value">
               <span className="detail-location">
@@ -594,7 +594,7 @@ export default function TaskDetailPanel() {
         {task.url && (
           <div className="detail-actions">
             <a href={task.url} target="_blank" rel="noopener noreferrer" className="detail-open-btn">
-              🔗 Open in ClickUp
+              Open in ClickUp
             </a>
           </div>
         )}

@@ -76,7 +76,7 @@ export default function ListView() {
   if (!selectedUserName || allTasks.length === 0) {
     return (
       <div className="empty-state">
-        <div className="empty-state-icon">📋</div>
+        <div className="empty-state-icon">List</div>
         <div className="empty-state-text">No tasks to display</div>
         <div className="empty-state-sub">Select an assignee and click Generate first</div>
       </div>

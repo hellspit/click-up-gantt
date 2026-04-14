@@ -57,7 +57,7 @@ export default function Dashboard() {
   if (!selectedUserName || tasks.length === 0) {
     return (
       <div className="empty-state">
-        <div className="empty-state-icon">📊</div>
+        <div className="empty-state-icon">Gantt</div>
         <div className="empty-state-text">
           {selectedUserName ? 'No tasks found for this assignee' : 'Select an assignee and click Generate'}
         </div>

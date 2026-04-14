@@ -340,7 +340,7 @@ function ComparisonChart({
         alignItems: 'center',
         gap: '8px',
       }}>
-        <span>📊</span>
+        <span style={{ fontSize: '11px', color: 'var(--text-tertiary)' }}>||</span>
         Team Comparison
       </div>
 
@@ -1238,11 +1238,12 @@ export default function PieChartView() {
   const actualDelayedSlices = useMemo(() => buildSlices(groupTasksByAssignee(actualDelayedTasks)), [actualDelayedTasks]);
 
   // Separate filtered list for status chart — uses due date instead of completion date
+  // Include tasks without endDate so in-progress/to-do tasks aren't dropped
   const statusFilteredTasks = useMemo(() => {
     let result = allTasks;
     const cutoff = getDurationCutoff(duration);
     if (cutoff) {
-      result = result.filter(t => t.endDate && t.endDate >= cutoff);
+      result = result.filter(t => !t.endDate || t.endDate >= cutoff);
     }
     if (folderFilter !== 'all') {
       result = result.filter(t => t.folder.name === folderFilter);
@@ -1269,15 +1270,15 @@ export default function PieChartView() {
     for (const task of statusFilteredTasks) {
       const s = task.status.toLowerCase();
       const isDone = ['complete', 'done', 'resolved', 'closed'].some(k => s.includes(k)) || task.statusType === 'closed';
-      const isInProgress = ['in progress', 'doing', 'working', 'active', 'review', 'in review'].some(k => s.includes(k));
-      const isOverdue = !isDone && task.endDate && task.endDate < now;
+      const isInProgress = ['in progress', 'doing', 'working', 'active', 'review', 'in review'].some(k => s.includes(k)) || task.statusType === 'active';
+      const isOverdue = !isDone && !isInProgress && task.endDate && task.endDate < now;
 
-      if (isOverdue) {
-        counts.set('Overdue', (counts.get('Overdue') || 0) + 1);
-      } else if (isDone) {
+      if (isDone) {
         counts.set('Completed', (counts.get('Completed') || 0) + 1);
       } else if (isInProgress) {
         counts.set('In Progress', (counts.get('In Progress') || 0) + 1);
+      } else if (isOverdue) {
+        counts.set('Overdue', (counts.get('Overdue') || 0) + 1);
       } else {
         counts.set('To Do', (counts.get('To Do') || 0) + 1);
       }
@@ -1505,13 +1506,13 @@ export default function PieChartView() {
             return tasks.filter(t => {
               const s = t.status.toLowerCase();
               const isDone = ['complete', 'done', 'resolved', 'closed'].some(k => s.includes(k)) || t.statusType === 'closed';
-              const isInProgress = ['in progress', 'doing', 'working', 'active', 'review', 'in review'].some(k => s.includes(k));
-              const isOverdue = !isDone && t.endDate && t.endDate < now;
+              const isInProgress = ['in progress', 'doing', 'working', 'active', 'review', 'in review'].some(k => s.includes(k)) || t.statusType === 'active';
+              const isOverdue = !isDone && !isInProgress && t.endDate && t.endDate < now;
 
               switch (sliceLabel) {
+                case 'Completed': return isDone;
+                case 'In Progress': return isInProgress && !isDone;
                 case 'Overdue': return !!isOverdue;
-                case 'Completed': return isDone && !isOverdue;
-                case 'In Progress': return isInProgress && !isDone && !isOverdue;
                 case 'To Do': return !isDone && !isInProgress && !isOverdue;
                 default: return false;
               }

@@ -310,7 +310,7 @@ export default function TeamPage() {
                   transition: 'all 0.2s',
                 }}
               >
-                👥 Filter
+                Filter
                 {isFiltering && (
                   <span
                     style={{
@@ -393,7 +393,7 @@ export default function TeamPage() {
       {/* Error / Warning */}
       {error && (
         <div className="error-banner">
-          ⚠️ {error}
+          Warning: {error}
           <button onClick={() => useTaskStore.getState().reset()}>Dismiss</button>
         </div>
       )}

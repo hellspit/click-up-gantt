@@ -213,7 +213,7 @@ export default function StatusView() {
   if (!selectedUserName || total === 0) {
     return (
       <div className="empty-state">
-        <div className="empty-state-icon">📈</div>
+        <div className="empty-state-icon">Status</div>
         <div className="empty-state-text">No tasks to analyze</div>
         <div className="empty-state-sub">Select an assignee and click Generate first</div>
       </div>

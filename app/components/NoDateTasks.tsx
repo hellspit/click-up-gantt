@@ -22,7 +22,7 @@ export default function NoDateTasks() {
     <div className="no-date-section">
       <div className="no-date-header" onClick={() => setExpanded(!expanded)}>
         <span>{expanded ? '▾' : '▸'}</span>
-        📌 Tasks Without Dates ({noDateTasks.length})
+        Tasks Without Dates ({noDateTasks.length})
       </div>
       {expanded && (
         <div className="no-date-list">

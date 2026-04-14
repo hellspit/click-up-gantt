@@ -27,7 +27,7 @@ export default function Home() {
       <SummaryBar />
       {error && (
         <div className="error-banner">
-          ⚠️ {error}
+          Warning: {error}
           <button onClick={() => useTaskStore.getState().reset()}>Dismiss</button>
         </div>
       )}

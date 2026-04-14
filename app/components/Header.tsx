@@ -4,9 +4,9 @@ import { useState, useEffect, useRef } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
 
 const VIEW_TABS = [
-  { key: 'gantt' as const, icon: '📅', label: 'Gantt' },
-  { key: 'list' as const, icon: '📋', label: 'List' },
-  { key: 'status' as const, icon: '📈', label: 'Status' },
+  { key: 'gantt' as const, icon: '', label: 'Gantt' },
+  { key: 'list' as const, icon: '', label: 'List' },
+  { key: 'status' as const, icon: '', label: 'Status' },
 ];
 
 // Status color mapping for common ClickUp statuses
@@ -114,7 +114,7 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
       {/* Date Range Section */}
       <div style={{ padding: '16px', borderBottom: '1px solid var(--border-primary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '14px' }}>📅</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Date Range</span>
           <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Date Range</span>
         </div>
         <div style={{ display: 'flex', gap: '10px', alignItems: 'center' }}>
@@ -141,7 +141,7 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
               onBlur={e => (e.currentTarget.style.borderColor = 'var(--border-primary)')}
             />
           </div>
-          <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', paddingTop: '16px' }}>→</span>
+          <span style={{ color: 'var(--text-tertiary)', fontSize: '12px', paddingTop: '16px' }}>to</span>
           <div style={{ flex: 1, position: 'relative' }}>
             <label style={{ fontSize: '9px', color: 'var(--text-muted)', fontWeight: 600, display: 'block', marginBottom: '4px', textTransform: 'uppercase', letterSpacing: '0.5px' }}>To</label>
             <input
@@ -171,7 +171,7 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
       {/* Status Section */}
       <div style={{ padding: '16px' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '14px' }}>🏷️</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Status</span>
           <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Task Status</span>
         </div>
         {availableStatuses.length === 0 ? (
@@ -235,14 +235,14 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
       {/* Delay Type Section */}
       <div style={{ padding: '16px', borderBottom: '1px solid var(--border-primary)' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
-          <span style={{ fontSize: '14px' }}>⚠️</span>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Delay</span>
           <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Delay Type</span>
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {[
-            { key: 'starting', label: 'Starting Delay', color: '#6e7681', icon: '⏳' },
-            { key: 'project_length', label: 'Project Length Delay', color: '#da3633', icon: '📏' },
-            { key: 'completion', label: 'Completion Delay', color: '#f85149', icon: '🏁' },
+            { key: 'starting', label: 'Starting Delay', color: '#6e7681', icon: '' },
+            { key: 'project_length', label: 'Project Length Delay', color: '#da3633', icon: '' },
+            { key: 'completion', label: 'Completion Delay', color: '#f0883e', icon: '' },
           ].map(d => {
             const active = delayFilter.has(d.key);
             return (
@@ -277,7 +277,7 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
                   }
                 }}
               >
-                <span style={{ fontSize: '12px' }}>{d.icon}</span>
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                 {d.label}
               </div>
             );
@@ -389,15 +389,15 @@ export default function Header() {
           href="/"
           className={`nav-link ${!isTeamMode ? 'nav-link-active' : ''}`}
         >
-          <span className="nav-link-icon">👤</span>
-          Individual
+          <span className="nav-link-icon" style={{ fontSize: '13px' }}>Individual</span>
+
         </a>
         <a
           href="/team"
           className={`nav-link ${isTeamMode ? 'nav-link-active' : ''}`}
         >
-          <span className="nav-link-icon">👥</span>
-          Team
+          <span className="nav-link-icon" style={{ fontSize: '13px' }}>Team</span>
+
         </a>
         <div className="nav-spacer" />
         <span className="nav-brand">ClickUp Dashboard</span>
@@ -457,7 +457,7 @@ export default function Header() {
                   transition: 'all 0.2s',
                 }}
               >
-                🔍 Filter
+                Filter
                 {hasIndividualFilter && (
                   <span
                     style={{
@@ -491,9 +491,9 @@ export default function Header() {
       <div className="view-switcher">
         {(isTeamMode
           ? [
-              { key: 'gantt' as const, icon: '🥧', label: 'Pie' },
-              { key: 'list' as const, icon: '📋', label: 'List' },
-              { key: 'status' as const, icon: '📈', label: 'Status' },
+              { key: 'gantt' as const, icon: '', label: 'Pie' },
+              { key: 'list' as const, icon: '', label: 'List' },
+              { key: 'status' as const, icon: '', label: 'Status' },
             ]
           : VIEW_TABS
         ).map(tab => (
