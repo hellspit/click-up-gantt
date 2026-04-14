@@ -14,7 +14,7 @@ const STATUS_COLORS: Record<string, string> = {
   'complete': '#3fb950',
   'done': '#3fb950',
   'closed': '#8b949e',
-  'in progress': '#e3b341',
+  'in progress': '#5A43D6',
   'in review': '#bc8cff',
   'review': '#bc8cff',
   'to do': '#58a6ff',

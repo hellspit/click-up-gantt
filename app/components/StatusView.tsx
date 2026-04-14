@@ -22,7 +22,7 @@ function categorizeStatus(status: string): string {
 
 const STATUS_META: Record<string, { label: string; color: string; order: number }> = {
   complete:    { label: 'Completed',   color: '#3fb950', order: 0 },
-  in_progress: { label: 'In Progress', color: '#d29922', order: 1 },
+  in_progress: { label: 'In Progress', color: '#5A43D6', order: 1 },
   review:      { label: 'In Review',   color: '#bc8cff', order: 2 },
   todo:        { label: 'To Do',       color: '#58a6ff', order: 3 },
   closed:      { label: 'Closed',      color: '#6e7681', order: 4 },

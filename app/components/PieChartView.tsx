@@ -24,7 +24,7 @@ interface SliceData {
 // ── Status grouping config ──
 const STATUS_GROUPS = [
   { key: 'todo', label: 'TO DO', match: ['to do', 'todo', 'open', 'not started'], color: '#58a6ff', icon: '○' },
-  { key: 'inprogress', label: 'IN PROGRESS', match: ['in progress', 'doing', 'working', 'active'], color: '#d29922', icon: '◐' },
+  { key: 'inprogress', label: 'IN PROGRESS', match: ['in progress', 'doing', 'working', 'active'], color: '#5A43D6', icon: '◐' },
   { key: 'review', label: 'REVIEW', match: ['review', 'in review', 'pending review', 'under review'], color: '#bc8cff', icon: '◑' },
   { key: 'done', label: 'COMPLETE', match: ['complete', 'done', 'closed', 'resolved'], color: '#3fb950', icon: '●' },
 ];
@@ -69,7 +69,7 @@ function isTaskDelayed(task: NormalizedTask): boolean {
   const now = new Date();
   const doneStatuses = ['complete', 'closed', 'done', 'resolved'];
   const isDone = doneStatuses.includes(task.status.toLowerCase()) ||
-                 task.statusType === 'closed';
+    task.statusType === 'closed';
 
   if (!task.endDate) return false;
   if (!isDone && task.endDate < now) return true;
@@ -81,26 +81,26 @@ function isTaskDelayed(task: NormalizedTask): boolean {
 function isTaskActuallyDelayed(task: NormalizedTask): boolean {
   const customField = task.customFields.find(cf => cf.name.toLowerCase() === 'delayed');
   if (!customField) return false;
-  
+
   if (customField.type === 'drop_down' && customField.typeConfig?.options) {
-      const optionByIndex = customField.typeConfig.options.find((opt: any) => opt.orderindex === customField.value);
-      if (optionByIndex && optionByIndex.name && optionByIndex.name.toLowerCase() === 'yes') {
-          return true;
-      }
-      const optionById = customField.typeConfig.options.find((opt: any) => opt.id === customField.value);
-      if (optionById && optionById.name && optionById.name.toLowerCase() === 'yes') {
-           return true;
-      }
-  }
-  
-  if (typeof customField.value === 'string' && customField.value.toLowerCase() === 'yes') {
+    const optionByIndex = customField.typeConfig.options.find((opt: any) => opt.orderindex === customField.value);
+    if (optionByIndex && optionByIndex.name && optionByIndex.name.toLowerCase() === 'yes') {
       return true;
+    }
+    const optionById = customField.typeConfig.options.find((opt: any) => opt.id === customField.value);
+    if (optionById && optionById.name && optionById.name.toLowerCase() === 'yes') {
+      return true;
+    }
+  }
+
+  if (typeof customField.value === 'string' && customField.value.toLowerCase() === 'yes') {
+    return true;
   }
   if (Array.isArray(customField.value)) {
-      return customField.value.some(v => typeof v === 'string' && v.toLowerCase() === 'yes');
+    return customField.value.some(v => typeof v === 'string' && v.toLowerCase() === 'yes');
   }
   if (customField.type === 'checkbox' && customField.value === true) {
-      return true;
+    return true;
   }
 
   return false;
@@ -276,7 +276,7 @@ function buildMemberComparison(allTasks: NormalizedTask[], teamMemberUsernames?:
       const completed = data.total.filter(t =>
         doneStatuses.includes(t.status.toLowerCase()) || t.statusType === 'closed'
       ).length;
-      
+
       const total = data.total.length;
       const actualDel = data.actualDelayed.length;
       const efficiencyRate = total > 0 ? Math.round(((total - actualDel) / total) * 100) : 0;
@@ -353,11 +353,11 @@ function ComparisonChart({
         color: 'var(--text-secondary)',
       }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#4e79f6' }} />
+          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#f7090dff' }} />
           <span>Delayed Tasks</span>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: '5px' }}>
-          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#e15759' }} />
+          <div style={{ width: '10px', height: '10px', borderRadius: '2px', background: '#0844fbff' }} />
           <span>Total Tasks</span>
         </div>
       </div>
@@ -453,7 +453,7 @@ function ComparisonChart({
                 width={totalBarW}
                 height={barHeight / 2 - 2}
                 rx={3}
-                fill={isHighlighted ? '#e15759' : 'rgba(225, 87, 89, 0.6)'}
+                fill={isHighlighted ? '#4e79f6' : 'rgba(78, 121, 246, 0.6)'}
                 opacity={isHovered ? 1 : 0.85}
                 style={{ transition: 'opacity 0.15s' }}
               />
@@ -466,7 +466,7 @@ function ComparisonChart({
                   width={delayedBarW}
                   height={barHeight / 2 - 3}
                   rx={3}
-                  fill={isHighlighted ? '#4e79f6' : 'rgba(78, 121, 246, 0.6)'}
+                  fill={isHighlighted ? '#e15759' : 'rgba(225, 87, 89, 0.6)'}
                   opacity={isHovered ? 1 : 0.85}
                   style={{ transition: 'opacity 0.15s' }}
                 />
@@ -477,7 +477,7 @@ function ComparisonChart({
                 x={barX + totalBarW + 6}
                 y={y + barHeight / 4 + 1}
                 dominantBaseline="middle"
-                fill={isHighlighted ? '#e15759' : 'var(--text-tertiary)'}
+                fill={isHighlighted ? '#4e79f6' : 'var(--text-tertiary)'}
                 fontSize="9"
                 fontWeight={700}
                 fontFamily="var(--font-mono)"
@@ -491,7 +491,7 @@ function ComparisonChart({
                   x={barX + delayedBarW + 6}
                   y={y + barHeight * 3 / 4}
                   dominantBaseline="middle"
-                  fill={isHighlighted ? '#4e79f6' : 'var(--text-muted)'}
+                  fill={isHighlighted ? '#e15759' : 'var(--text-muted)'}
                   fontSize="9"
                   fontWeight={600}
                   fontFamily="var(--font-mono)"
@@ -1258,7 +1258,7 @@ export default function PieChartView() {
   const statusSlices = useMemo(() => {
     const STATUS_CATEGORIES: { label: string; color: string }[] = [
       { label: 'Completed', color: '#3fb950' },
-      { label: 'In Progress', color: '#d29922' },
+      { label: 'In Progress', color: '#5A43D6' },
       { label: 'To Do', color: '#58a6ff' },
       { label: 'Overdue', color: '#f85149' },
     ];

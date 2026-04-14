@@ -10,7 +10,7 @@ type SortDir = 'asc' | 'desc';
 function getStatusColor(status: string): string {
   const s = status.toLowerCase();
   if (s.includes('complete') || s.includes('done') || s.includes('resolved')) return '#3fb950';
-  if (s.includes('progress') || s.includes('active')) return '#d29922';
+  if (s.includes('progress') || s.includes('active')) return '#5A43D6';
   if (s.includes('review') || s.includes('test')) return '#bc8cff';
   if (s.includes('closed') || s.includes('archived')) return '#6e7681';
   return '#58a6ff';
