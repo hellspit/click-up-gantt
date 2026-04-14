@@ -97,6 +97,9 @@ function computeDelays(task: NormalizedTask, customFields: CustomField[]): {
   delays: DelayType[];
   plannedDays: number | null;
   executionDays: number | null;
+  startingDelayDays: number;
+  projectLengthDelayDays: number;
+  completionDelayDays: number;
 } {
   const pStartCf = findField(customFields, PLANNED_START_NAMES);
   const pDueCf = findField(customFields, PLANNED_DUE_NAMES);
@@ -106,21 +109,35 @@ function computeDelays(task: NormalizedTask, customFields: CustomField[]): {
   const aDue = task.endDate ? task.endDate.getTime() : null;
 
   const ONE_DAY = 86400000;
-  const plannedDays = pStart && pDue ? Math.round((pDue.getTime() - pStart.getTime()) / ONE_DAY) : null;
-  const executionDays = aStart && aDue ? Math.round((aDue - aStart) / ONE_DAY) : null;
+  const plannedDays = pStart && pDue ? Math.max(1, Math.round((pDue.getTime() - pStart.getTime()) / ONE_DAY)) : null;
+  const executionDays = aStart && aDue ? Math.max(1, Math.round((aDue - aStart) / ONE_DAY)) : null;
 
+  let startingDelayDays = 0;
+  let projectLengthDelayDays = 0;
+  let completionDelayDays = 0;
   const delays: DelayType[] = [];
+
   if (pStart && pDue && aStart && aDue) {
-    if (aStart > pStart.getTime()) delays.push('Starting Delay');
+    // Starting delay: how many days late the task started
+    startingDelayDays = Math.max(0, Math.round((aStart - pStart.getTime()) / ONE_DAY));
+    if (startingDelayDays > 0) delays.push('Starting Delay');
+
+    // Project length delay: how many extra days the task took vs planned duration
     const plannedWindow = pDue.getTime() - pStart.getTime();
     const actualWindow = aDue - aStart;
-    if ((actualWindow - plannedWindow) > ONE_DAY) delays.push('Project Length Delay');
-    // Completion delay: dateCompleted - actual due date > 1 day
-    const doneTs = task.dateCompleted ? task.dateCompleted.getTime() : null;
-    if (doneTs && (doneTs - aDue) > ONE_DAY) delays.push('Completion Delay');
+    projectLengthDelayDays = Math.max(0, Math.round((actualWindow - plannedWindow) / ONE_DAY));
+    if (projectLengthDelayDays > 0) delays.push('Project Length Delay');
+
+    // Completion delay: dateCompleted - actual due date
+    if (task.dateCompleted && task.endDate) {
+      const doneDay = new Date(task.dateCompleted.getFullYear(), task.dateCompleted.getMonth(), task.dateCompleted.getDate());
+      const dueDay = new Date(task.endDate.getFullYear(), task.endDate.getMonth(), task.endDate.getDate());
+      completionDelayDays = Math.max(0, Math.round((doneDay.getTime() - dueDay.getTime()) / ONE_DAY));
+      if (completionDelayDays > 0) delays.push('Completion Delay');
+    }
   }
 
-  return { delays, plannedDays, executionDays };
+  return { delays, plannedDays, executionDays, startingDelayDays, projectLengthDelayDays, completionDelayDays };
 }
 
 export default function TaskDetailPanel() {
@@ -260,7 +277,7 @@ export default function TaskDetailPanel() {
           {/* Execution Dates */}
           <div className="detail-field">
             <div className="detail-field-icon">📅</div>
-            <div className="detail-field-label">Execution Dates</div>
+            <div className="detail-field-label">Final    Dates</div>
             <div className="detail-field-value">
               <div className="detail-dates">
                 <div className="detail-date-row">
@@ -283,16 +300,27 @@ export default function TaskDetailPanel() {
                 const pDueDate = parseCfTimestamp(plannedDue);
                 const plannedDayCount = pStartDate && pDueDate ? Math.round((pDueDate.getTime() - pStartDate.getTime()) / 86400000) : null;
                 const delayDays = plannedDayCount !== null ? execDays - plannedDayCount : null;
+                // Completion delay
+                let completionDelayDays: number | null = null;
+                if (task.dateCompleted && task.endDate) {
+                  const doneDay = new Date(task.dateCompleted.getFullYear(), task.dateCompleted.getMonth(), task.dateCompleted.getDate());
+                  const dueDay = new Date(task.endDate.getFullYear(), task.endDate.getMonth(), task.endDate.getDate());
+                  completionDelayDays = Math.max(0, Math.round((doneDay.getTime() - dueDay.getTime()) / 86400000));
+                }
+
                 return (
                   <div style={{ marginTop: '6px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '2px' }}>
                     {plannedDayCount !== null && delayDays !== null ? (
                       <span>
                         <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>({plannedDayCount}d</span>
                         {delayDays > 0 && (
-                          <span style={{ color: '#f85149', fontWeight: 700 }}> +{delayDays}d</span>
+                          <span style={{ color: '#f85149', fontWeight: 700 }}> +{delayDays}d (project length delay)</span>
                         )}
                         {delayDays < 0 && (
                           <span style={{ color: '#3fb950', fontWeight: 700 }}> {delayDays}d</span>
+                        )}
+                        {completionDelayDays !== null && completionDelayDays > 0 && (
+                          <span style={{ color: '#f85149', fontWeight: 700 }}> +{completionDelayDays}d (completion delay)</span>
                         )}
                         <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>)</span>
                       </span>
@@ -368,12 +396,15 @@ export default function TaskDetailPanel() {
                 <div className="detail-field-icon">⏱</div>
                 <div className="detail-field-label">Delay Duration</div>
                 <div className="detail-field-value">
-                  <span style={{
-                    fontWeight: 700,
-                    color: isDelayed ? '#f85149' : isEarly ? '#3fb950' : '#8b949e',
-                  }}>
-                    {isDelayed ? `+${delayDays} day${delayDays !== 1 ? 's' : ''}` : isEarly ? `${delayDays} day${Math.abs(delayDays) !== 1 ? 's' : ''} (early)` : `${delayDays} days`}
-                  </span>
+                  <div style={{ display: 'flex', alignItems: 'baseline', gap: '6px' }}>
+                    <span style={{
+                      fontWeight: 700,
+                      color: isDelayed ? '#f85149' : isEarly ? '#3fb950' : '#8b949e',
+                    }}>
+                      {isDelayed ? `+${delayDays} day${delayDays !== 1 ? 's' : ''}` : isEarly ? `${delayDays} day${Math.abs(delayDays) !== 1 ? 's' : ''} (early)` : `${delayDays} days`}
+                    </span>
+                    <span style={{ color: 'var(--text-secondary)', fontWeight: 600, fontSize: '11px' }}>(date done - final due date)</span>
+                  </div>
                 </div>
               </div>
             );
@@ -381,20 +412,8 @@ export default function TaskDetailPanel() {
 
           {/* ── Delay Analysis (Gantt view only) ── */}
           {activeView === 'gantt' && (() => {
-            const { delays, plannedDays, executionDays } = computeDelays(task, customFields);
-            const hasAnyData = delays.length > 0 || plannedDays !== null || executionDays !== null;
-            if (!hasAnyData) return null;
-
-            const DELAY_COLORS: Record<string, string> = {
-              'Starting Delay': '#6e7681',
-              'Project Length Delay': '#da3633',
-              'Completion Delay': '#f85149',
-            };
-            const DELAY_ICONS: Record<string, string> = {
-              'Starting Delay': '⏳',
-              'Project Length Delay': '📏',
-              'Completion Delay': '🏁',
-            };
+            const { delays, plannedDays, executionDays, startingDelayDays, projectLengthDelayDays, completionDelayDays } = computeDelays(task, customFields);
+            if (plannedDays === null && executionDays === null) return null;
 
             return (
               <div className="detail-field" style={{ gridColumn: '1 / -1' }}>
@@ -402,46 +421,35 @@ export default function TaskDetailPanel() {
                 <div className="detail-field-label">Delay Analysis</div>
                 <div className="detail-field-value">
                   <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
-                    {/* Delay types */}
-                    {delays.length > 0 ? (
-                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
-                        {delays.map(d => (
-                          <span
-                            key={d}
-                            style={{
-                              display: 'inline-flex',
-                              alignItems: 'center',
-                              gap: '4px',
-                              padding: '3px 10px',
-                              borderRadius: '12px',
-                              fontSize: '11px',
-                              fontWeight: 600,
-                              background: `${DELAY_COLORS[d]}20`,
-                              border: `1px solid ${DELAY_COLORS[d]}`,
-                              color: DELAY_COLORS[d],
-                            }}
-                          >
-                            {DELAY_ICONS[d]} {d}
+                    {/* Individual delay values - always show all 3 */}
+                    <div style={{
+                      display: 'flex',
+                      flexDirection: 'column',
+                      gap: '6px',
+                      padding: '10px 12px',
+                      background: 'var(--bg-tertiary)',
+                      borderRadius: '8px',
+                      border: '1px solid var(--border-primary)',
+                    }}>
+                      {[
+                        { label: 'Starting Delay', value: startingDelayDays, color: '#6e7681', icon: '⏳' },
+                        { label: 'Project Length Delay', value: projectLengthDelayDays, color: '#da3633', icon: '📏' },
+                        { label: 'Completion Delay', value: completionDelayDays, color: '#f85149', icon: '🏁' },
+                      ].map(d => (
+                        <div key={d.label} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+                          <span style={{ fontSize: '11px', color: 'var(--text-secondary)', display: 'flex', alignItems: 'center', gap: '6px' }}>
+                            <span>{d.icon}</span> {d.label}
                           </span>
-                        ))}
-                      </div>
-                    ) : (
-                      <span style={{
-                        display: 'inline-flex',
-                        alignItems: 'center',
-                        gap: '4px',
-                        padding: '3px 10px',
-                        borderRadius: '12px',
-                        fontSize: '11px',
-                        fontWeight: 600,
-                        background: 'rgba(63, 185, 80, 0.15)',
-                        border: '1px solid #3fb950',
-                        color: '#3fb950',
-                        width: 'fit-content',
-                      }}>
-                        ✅ No Delays
-                      </span>
-                    )}
+                          <span style={{
+                            fontSize: '12px',
+                            fontWeight: 700,
+                            color: d.value > 0 ? d.color : '#8b949e',
+                          }}>
+                            {d.value} {d.value === 1 ? 'day' : 'days'}
+                          </span>
+                        </div>
+                      ))}
+                    </div>
 
                     {/* Planned vs Execution days comparison */}
                     {(plannedDays !== null || executionDays !== null) && (
@@ -466,39 +474,18 @@ export default function TaskDetailPanel() {
                         {executionDays !== null && (
                           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
                             <span style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)' }}>Execution</span>
-                            <span style={{
-                              fontSize: '16px',
-                              fontWeight: 700,
-                              color: plannedDays !== null && executionDays > plannedDays ? '#f85149' : '#3fb950',
-                            }}>{executionDays}d</span>
-                          </div>
-                        )}
-                        {plannedDays !== null && executionDays !== null && (
-                          <div style={{
-                            marginLeft: 'auto',
-                            display: 'flex',
-                            alignItems: 'center',
-                            gap: '4px',
-                            padding: '2px 8px',
-                            borderRadius: '10px',
-                            fontSize: '11px',
-                            fontWeight: 700,
-                            background: executionDays > plannedDays
-                              ? 'rgba(248, 81, 73, 0.15)'
-                              : executionDays < plannedDays
-                              ? 'rgba(63, 185, 80, 0.15)'
-                              : 'rgba(139, 148, 158, 0.15)',
-                            color: executionDays > plannedDays
-                              ? '#f85149'
-                              : executionDays < plannedDays
-                              ? '#3fb950'
-                              : '#8b949e',
-                          }}>
-                            {executionDays > plannedDays
-                              ? `+${executionDays - plannedDays}d over`
-                              : executionDays < plannedDays
-                              ? `${plannedDays - executionDays}d early`
-                              : 'On time'}
+                            <div style={{ display: 'flex', alignItems: 'baseline', gap: '4px' }}>
+                              <span style={{
+                                fontSize: '16px',
+                                fontWeight: 700,
+                                color: plannedDays !== null && executionDays > plannedDays ? '#f85149' : '#3fb950',
+                              }}>{executionDays}d</span>
+                              {completionDelayDays > 0 && (
+                                <span style={{ fontSize: '12px', fontWeight: 700, color: '#f85149' }}>
+                                  +{completionDelayDays}d (completion delay)
+                                </span>
+                              )}
+                            </div>
                           </div>
                         )}
                       </div>
@@ -508,6 +495,9 @@ export default function TaskDetailPanel() {
               </div>
             );
           })()}
+
+
+
 
           {/* Duration */}
           <div className="detail-field">
