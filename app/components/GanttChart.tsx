@@ -17,13 +17,22 @@ function findCustomField(fields: CustomField[], names: string[]): CustomField | 
   return fields.find(cf => names.includes(cf.name.toLowerCase()) && cf.value !== null && cf.value !== undefined && cf.value !== '');
 }
 
+function formatDateCompact(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getMonth()]} ${date.getDate()}`;
+}
+
+function daysBetween(a: Date, b: Date): number {
+  return Math.max(1, Math.round(Math.abs(b.getTime() - a.getTime()) / 86400000));
+}
+
 function formatPlannedDate(cf: CustomField): string {
   const ts = Number(cf.value);
   if (!isNaN(ts) && ts > 1000000000000) {
-    return new Date(ts).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    return formatDateCompact(new Date(ts));
   }
   if (!isNaN(ts) && ts > 1000000000) {
-    return new Date(ts * 1000).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: '2-digit' });
+    return formatDateCompact(new Date(ts * 1000));
   }
   return String(cf.value);
 }
@@ -137,6 +146,16 @@ function renderHeader(startDate: Date, totalDays: number, pxPerDay: number, tota
   );
 }
 
+function parseCustomFieldDate(cf: CustomField | undefined): Date | null {
+  if (!cf) return null;
+  const ts = Number(cf.value);
+  if (isNaN(ts) || ts === 0) return null;
+  // Handle both milliseconds and seconds timestamps
+  if (ts > 1000000000000) return new Date(ts);
+  if (ts > 1000000000) return new Date(ts * 1000);
+  return null;
+}
+
 function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWidth: number, today: Date, rowHeight: number) {
   const totalHeight = rows.length * rowHeight;
   const todayX = dateToPx(today, startDate, pxPerDay);
@@ -144,8 +163,59 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
   // Build day grid for background
   const totalDays = Math.ceil(totalWidth / pxPerDay);
 
+  // Collect delay bar info for generating unique gradient defs
+  const delayBars: { id: string; delayX: number; delayW: number; y: number; h: number }[] = [];
+  const projDelayBars: { id: string }[] = [];
+  rows.forEach((row, i) => {
+    if (row.type !== 'task') return;
+    const t = row.task;
+    if (!t.startDate || !t.endDate) return;
+    const plannedStartCf = findCustomField(t.customFields, PLANNED_START_NAMES);
+    const plannedStartDate = parseCustomFieldDate(plannedStartCf);
+    // Starting delay gradient
+    if (plannedStartDate && t.startDate.getTime() > plannedStartDate.getTime()) {
+      const delayX = dateToPx(plannedStartDate, startDate, pxPerDay);
+      const taskX = dateToPx(t.startDate, startDate, pxPerDay);
+      const delayW = taskX - delayX;
+      if (delayW > 0) {
+        delayBars.push({ id: `delay-grad-${t.id}-${i}`, delayX, delayW, y: i * rowHeight + 8, h: rowHeight - 16 });
+      }
+    }
+    // Project length delay gradient
+    const plannedDueCf = findCustomField(t.customFields, PLANNED_DUE_NAMES);
+    const plannedDueDate = parseCustomFieldDate(plannedDueCf);
+    const ONE_DAY = 86400000;
+    if (plannedStartDate && plannedDueDate) {
+      const plannedDuration = plannedDueDate.getTime() - plannedStartDate.getTime();
+      const actualDuration = t.endDate.getTime() - t.startDate.getTime();
+      if ((actualDuration - plannedDuration) > ONE_DAY) {
+        projDelayBars.push({ id: `proj-delay-grad-${t.id}-${i}` });
+      }
+    }
+  });
+
   return (
     <svg className="gantt-bars-svg" width={totalWidth} height={totalHeight} style={{ display: 'block' }}>
+      {/* Gradient definitions for delay bars */}
+      <defs>
+        {/* Starting delay: grey gradient */}
+        {delayBars.map(db => (
+          <linearGradient key={db.id} id={db.id} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#6e7681" stopOpacity={0.15} />
+            <stop offset="40%" stopColor="#6e7681" stopOpacity={0.35} />
+            <stop offset="100%" stopColor="#6e7681" stopOpacity={0.6} />
+          </linearGradient>
+        ))}
+        {/* Project length delay: red gradient */}
+        {projDelayBars.map(db => (
+          <linearGradient key={db.id} id={db.id} x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" stopColor="#da3633" stopOpacity={0.4} />
+            <stop offset="50%" stopColor="#da3633" stopOpacity={0.7} />
+            <stop offset="100%" stopColor="#da3633" stopOpacity={0.9} />
+          </linearGradient>
+        ))}
+      </defs>
+
       {/* Weekend shading */}
       {Array.from({ length: totalDays }).map((_, i) => {
         const d = new Date(startDate);
@@ -184,18 +254,96 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
         const hasPlannedDates = plannedStart || plannedDue;
 
         let plannedLabel = 'Planned dates not present';
+        const plannedStartDate = parseCustomFieldDate(plannedStart);
+        const plannedDueDate = parseCustomFieldDate(plannedDue);
         if (hasPlannedDates) {
           const startStr = plannedStart ? formatPlannedDate(plannedStart) : '—';
           const dueStr = plannedDue ? formatPlannedDate(plannedDue) : '—';
-          plannedLabel = `${startStr} - ${dueStr}`;
+          const dayCount = plannedStartDate && plannedDueDate ? daysBetween(plannedStartDate, plannedDueDate) : null;
+          plannedLabel = dayCount !== null ? `${startStr} - ${dueStr} (${dayCount}d)` : `${startStr} - ${dueStr}`;
         }
         const labelWidth = plannedLabel.length * 6;
 
+        // Starting Delay: actual start > planned start
+        // Grey bar spans only the planned window (planned start → planned due)
+        const hasStartingDelay = plannedStartDate && t.startDate.getTime() > plannedStartDate.getTime();
+        let delayBarX = 0;
+        let delayBarW = 0;
+        if (hasStartingDelay && plannedStartDate) {
+          delayBarX = dateToPx(plannedStartDate, startDate, pxPerDay);
+          // Only span the planned date range (planned start → planned due), not all the way to actual start
+          const delayEndDate = plannedDueDate && plannedDueDate.getTime() < t.startDate.getTime()
+            ? plannedDueDate
+            : t.startDate;
+          delayBarW = dateToPx(delayEndDate, startDate, pxPerDay) - delayBarX;
+        }
+
+        // Project Length Delay: actual duration > planned duration (by > 1 day)
+        const ONE_DAY_MS = 86400000;
+        let hasProjectLengthDelay = false;
+        let projDelayX = 0;
+        let projDelayW = 0;
+        let projDelayDays = 0;
+        if (plannedStartDate && plannedDueDate && t.startDate && t.endDate) {
+          const plannedDuration = plannedDueDate.getTime() - plannedStartDate.getTime();
+          const actualDuration = t.endDate.getTime() - t.startDate.getTime();
+          if ((actualDuration - plannedDuration) > ONE_DAY_MS) {
+            hasProjectLengthDelay = true;
+            projDelayDays = Math.round((actualDuration - plannedDuration) / ONE_DAY_MS);
+            // The "on-time" portion ends at actualStart + plannedDuration
+            const onTimeEnd = new Date(t.startDate.getTime() + plannedDuration);
+            projDelayX = dateToPx(onTimeEnd, startDate, pxPerDay);
+            projDelayW = dateToPx(t.endDate, startDate, pxPerDay) - projDelayX;
+          }
+        }
+
         return (
           <g key={t.id + '-' + i}>
+            {/* Starting Delay gradient bar (planned start → actual start) */}
+            {hasStartingDelay && delayBarW > 0 && (
+              <>
+                {/* Delay bar with gradient */}
+                <rect
+                  x={delayBarX}
+                  y={y}
+                  width={delayBarW}
+                  height={h}
+                  rx={4}
+                  fill={`url(#delay-grad-${t.id}-${i})`}
+                />
+                {/* Dashed border on delay bar */}
+                <rect
+                  x={delayBarX}
+                  y={y}
+                  width={delayBarW}
+                  height={h}
+                  rx={4}
+                  fill="none"
+                  stroke="#6e7681"
+                  strokeWidth={1}
+                  strokeDasharray="4 2"
+                  opacity={0.5}
+                />
+                {/* Small "delay" label inside if wide enough */}
+                {delayBarW > 40 && (
+                  <text
+                    x={delayBarX + delayBarW / 2}
+                    y={y + h / 2 + 3}
+                    textAnchor="middle"
+                    fill="#8b949e"
+                    fontSize={8}
+                    fontWeight={500}
+                    fontFamily="var(--font-sans)"
+                    fontStyle="italic"
+                  >
+                    delay
+                  </text>
+                )}
+              </>
+            )}
             {/* Planned date range label BEFORE bar */}
             <text
-              x={x - 4}
+              x={(hasStartingDelay && delayBarW > 0 ? delayBarX : x) - 4}
               y={y + h / 2 + 4}
               fill={hasPlannedDates ? '#8b949e' : '#6e7681'}
               fontSize={10}
@@ -209,6 +357,47 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
             <rect x={x + 1} y={y + 1} width={w} height={h} rx={4} fill="rgba(0,0,0,0.3)" />
             {/* Bar */}
             <rect x={x} y={y} width={w} height={h} rx={4} fill={color} opacity={0.9} />
+            {/* Project Length Delay: red overlay on the excess portion */}
+            {hasProjectLengthDelay && projDelayW > 0 && (
+              <>
+                {/* Red gradient overlay on the excess duration */}
+                <rect
+                  x={projDelayX}
+                  y={y}
+                  width={projDelayW}
+                  height={h}
+                  rx={4}
+                  fill={`url(#proj-delay-grad-${t.id}-${i})`}
+                />
+                {/* Dashed red border on the delay portion */}
+                <rect
+                  x={projDelayX}
+                  y={y}
+                  width={projDelayW}
+                  height={h}
+                  rx={4}
+                  fill="none"
+                  stroke="#da3633"
+                  strokeWidth={1}
+                  strokeDasharray="4 2"
+                  opacity={0.7}
+                />
+                {/* "+Xd" delay label */}
+                {projDelayW > 20 && (
+                  <text
+                    x={projDelayX + projDelayW / 2}
+                    y={y + h / 2 + 3}
+                    textAnchor="middle"
+                    fill="#fff"
+                    fontSize={9}
+                    fontWeight={700}
+                    fontFamily="var(--font-sans)"
+                  >
+                    +{projDelayDays}d
+                  </text>
+                )}
+              </>
+            )}
             {/* Status label on bar */}
             {w > 60 && (
               <text x={x + 8} y={y + h / 2 + 4} fill="#fff" fontSize={10} fontWeight={600} fontFamily="var(--font-sans)">
@@ -218,11 +407,11 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
             {/* Actual start date - due date label after bar */}
             <text x={x + w + 6} y={y + h / 2 + 4} fill="#8b949e" fontSize={10} fontFamily="var(--font-sans)">
               {t.startDate && t.endDate
-                ? `${formatShortDate(t.startDate)} - ${formatShortDate(t.endDate)}`
+                ? `${formatDateCompact(t.startDate)} - ${formatDateCompact(t.endDate)} (${daysBetween(t.startDate, t.endDate)}d)`
                 : t.startDate
-                ? formatShortDate(t.startDate)
+                ? formatDateCompact(t.startDate)
                 : t.endDate
-                ? formatShortDate(t.endDate)
+                ? formatDateCompact(t.endDate)
                 : ''}
             </text>
           </g>

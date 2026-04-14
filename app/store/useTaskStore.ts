@@ -1,7 +1,7 @@
 'use client';
 
 import { create } from 'zustand';
-import { ClickUpMember, NormalizedTask, TimelineConfig, TreeRow } from '../types';
+import { ClickUpMember, NormalizedTask, CustomField, TimelineConfig, TreeRow } from '../types';
 import { normalizeTask } from '../utils/taskNormalizer';
 import { getTimelineConfig } from '../utils/dateUtils';
 import { buildTaskHierarchy } from '../utils/taskGrouper';
@@ -27,10 +27,13 @@ interface ResolvedMember {
   profilePicture: string | null;
 }
 
+type DelayType = 'starting' | 'project_length' | 'completion';
+
 interface IndividualFilter {
   dateFrom: string | null; // ISO date string YYYY-MM-DD
   dateTo: string | null;
   statusFilter: Set<string>; // empty = show all
+  delayFilter: Set<DelayType>; // empty = show all (no delay filtering)
 }
 
 interface TaskStore {
@@ -121,6 +124,37 @@ function filterTasksByMembers(allTasks: NormalizedTask[], filterIds: Set<number>
   );
 }
 
+const PLANNED_START_FIELD_NAMES = ['planned start date', 'planned start'];
+const PLANNED_DUE_FIELD_NAMES = ['planned due date', 'planned due'];
+const ONE_DAY_MS = 86400000;
+
+function findCfValue(fields: CustomField[], names: string[]): number | null {
+  const cf = fields.find(f => names.includes(f.name.toLowerCase()) && f.value !== null && f.value !== undefined && f.value !== '');
+  if (!cf) return null;
+  const ts = Number(cf.value);
+  if (isNaN(ts) || ts === 0) return null;
+  return ts > 1000000000000 ? ts : ts > 1000000000 ? ts * 1000 : null;
+}
+
+function getTaskDelays(t: NormalizedTask): Set<DelayType> {
+  const delays = new Set<DelayType>();
+  const pStart = findCfValue(t.customFields, PLANNED_START_FIELD_NAMES);
+  const pDue = findCfValue(t.customFields, PLANNED_DUE_FIELD_NAMES);
+  const aStart = t.startDate ? t.startDate.getTime() : null;
+  const aDue = t.endDate ? t.endDate.getTime() : null;
+
+  if (pStart && pDue && aStart && aDue) {
+    if (aStart > pStart) delays.add('starting');
+    const plannedWindow = pDue - pStart;
+    const actualWindow = aDue - aStart;
+    if ((actualWindow - plannedWindow) > ONE_DAY_MS) delays.add('project_length');
+    // Completion delay: dateCompleted - actual due date > 1 day
+    const doneTs = t.dateCompleted ? t.dateCompleted.getTime() : null;
+    if (doneTs && (doneTs - aDue) > ONE_DAY_MS) delays.add('completion');
+  }
+  return delays;
+}
+
 function filterTasksIndividual(
   allTasks: NormalizedTask[],
   filter: IndividualFilter
@@ -153,6 +187,18 @@ function filterTasksIndividual(
   // Status filter
   if (filter.statusFilter.size > 0) {
     result = result.filter(t => filter.statusFilter.has(t.status.toLowerCase()));
+  }
+
+  // Delay filter
+  if (filter.delayFilter.size > 0) {
+    result = result.filter(t => {
+      const taskDelays = getTaskDelays(t);
+      // Show task if it has ANY of the selected delay types
+      for (const d of filter.delayFilter) {
+        if (taskDelays.has(d)) return true;
+      }
+      return false;
+    });
   }
 
   return result;
@@ -286,7 +332,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   // Individual unfiltered backup
   allIndividualTasks: [],
   allIndividualNoDateTasks: [],
-  individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set() },
+  individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set() },
   availableStatuses: [],
 
   // Team unfiltered backup
@@ -350,7 +396,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         allIndividualTasks: processed.tasks,
         allIndividualNoDateTasks: processed.noDateTasks,
         availableStatuses: allStatuses,
-        individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set() },
+        individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set() },
         loading: false,
         loadingProgress: '',
         collapsedGroups: new Set(),
@@ -560,6 +606,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       dateFrom: partial.dateFrom !== undefined ? partial.dateFrom : individualFilter.dateFrom,
       dateTo: partial.dateTo !== undefined ? partial.dateTo : individualFilter.dateTo,
       statusFilter: partial.statusFilter !== undefined ? partial.statusFilter : individualFilter.statusFilter,
+      delayFilter: partial.delayFilter !== undefined ? partial.delayFilter : individualFilter.delayFilter,
     };
 
     const filteredDated = filterTasksIndividual(allIndividualTasks, newFilter);
@@ -577,7 +624,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const { allIndividualTasks, allIndividualNoDateTasks } = get();
     const processed = processNormalizedTasks(allIndividualTasks, allIndividualNoDateTasks);
     set({
-      individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set() },
+      individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set() },
       ...processed,
       collapsedGroups: new Set(),
     });

@@ -31,8 +31,9 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
   const [dateFrom, setDateFrom] = useState(individualFilter.dateFrom || '');
   const [dateTo, setDateTo] = useState(individualFilter.dateTo || '');
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(individualFilter.statusFilter));
+  const [delayFilter, setDelayFilter] = useState<Set<string>>(new Set(individualFilter.delayFilter));
 
-  const isAnyFilter = dateFrom || dateTo || statusFilter.size > 0;
+  const isAnyFilter = dateFrom || dateTo || statusFilter.size > 0 || delayFilter.size > 0;
 
   const toggleStatus = (s: string) => {
     const next = new Set(statusFilter);
@@ -41,11 +42,19 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
     setStatusFilter(next);
   };
 
+  const toggleDelay = (d: string) => {
+    const next = new Set(delayFilter);
+    if (next.has(d)) next.delete(d);
+    else next.add(d);
+    setDelayFilter(next);
+  };
+
   const handleApply = () => {
     applyIndividualFilter({
       dateFrom: dateFrom || null,
       dateTo: dateTo || null,
       statusFilter,
+      delayFilter: delayFilter as any,
     });
     onClose();
   };
@@ -54,6 +63,7 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
     setDateFrom('');
     setDateTo('');
     setStatusFilter(new Set());
+    setDelayFilter(new Set());
     clearIndividualFilter();
     onClose();
   };
@@ -222,6 +232,59 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
         )}
       </div>
 
+      {/* Delay Type Section */}
+      <div style={{ padding: '16px', borderBottom: '1px solid var(--border-primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '14px' }}>⚠️</span>
+          <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Delay Type</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {[
+            { key: 'starting', label: 'Starting Delay', color: '#6e7681', icon: '⏳' },
+            { key: 'project_length', label: 'Project Length Delay', color: '#da3633', icon: '📏' },
+            { key: 'completion', label: 'Completion Delay', color: '#f85149', icon: '🏁' },
+          ].map(d => {
+            const active = delayFilter.has(d.key);
+            return (
+              <div
+                key={d.key}
+                onClick={() => toggleDelay(d.key)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: active ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  background: active ? `${d.color}20` : 'var(--bg-tertiary)',
+                  border: active ? `1px solid ${d.color}` : '1px solid var(--border-primary)',
+                  color: active ? d.color : 'var(--text-secondary)',
+                  boxShadow: active ? `0 0 0 1px ${d.color}40, 0 2px 8px ${d.color}20` : 'none',
+                }}
+                onMouseEnter={e => {
+                  if (!active) {
+                    e.currentTarget.style.borderColor = 'var(--border-secondary)';
+                    e.currentTarget.style.background = 'var(--bg-hover)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!active) {
+                    e.currentTarget.style.borderColor = 'var(--border-primary)';
+                    e.currentTarget.style.background = 'var(--bg-tertiary)';
+                  }
+                }}
+              >
+                <span style={{ fontSize: '12px' }}>{d.icon}</span>
+                {d.label}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       {/* Apply button */}
       <div style={{ padding: '16px', borderTop: '1px solid var(--border-primary)', background: 'var(--bg-secondary)' }}>
         <div
@@ -315,7 +378,7 @@ export default function Header() {
   };
 
   const isTeamMode = mode === 'team';
-  const hasIndividualFilter = individualFilter.dateFrom || individualFilter.dateTo || individualFilter.statusFilter.size > 0;
+  const hasIndividualFilter = individualFilter.dateFrom || individualFilter.dateTo || individualFilter.statusFilter.size > 0 || individualFilter.delayFilter.size > 0;
   const hasTasks = tasks.length > 0 || noDateTasks.length > 0;
 
   return (
@@ -408,7 +471,7 @@ export default function Header() {
                       textAlign: 'center',
                     }}
                   >
-                    {(individualFilter.dateFrom || individualFilter.dateTo ? 1 : 0) + (individualFilter.statusFilter.size > 0 ? 1 : 0)}
+                    {(individualFilter.dateFrom || individualFilter.dateTo ? 1 : 0) + (individualFilter.statusFilter.size > 0 ? 1 : 0) + (individualFilter.delayFilter.size > 0 ? 1 : 0)}
                   </span>
                 )}
               </div>

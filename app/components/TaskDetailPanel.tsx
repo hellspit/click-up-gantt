@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
-import { CustomField } from '../types';
+import { CustomField, NormalizedTask } from '../types';
 
 function getStatusColor(status: string, color: string): string {
   const s = status.toLowerCase();
@@ -82,9 +82,51 @@ function findField(fields: CustomField[], names: string[]): CustomField | undefi
   return matches.find(cf => cf.value !== null && cf.value !== undefined && cf.value !== '') || matches[0];
 }
 
+function parseCfTimestamp(cf: CustomField | undefined): Date | null {
+  if (!cf || cf.value === null || cf.value === undefined || cf.value === '') return null;
+  const ts = Number(cf.value);
+  if (isNaN(ts) || ts === 0) return null;
+  if (ts > 1000000000000) return new Date(ts);
+  if (ts > 1000000000) return new Date(ts * 1000);
+  return null;
+}
+
+type DelayType = 'Starting Delay' | 'Project Length Delay' | 'Completion Delay';
+
+function computeDelays(task: NormalizedTask, customFields: CustomField[]): {
+  delays: DelayType[];
+  plannedDays: number | null;
+  executionDays: number | null;
+} {
+  const pStartCf = findField(customFields, PLANNED_START_NAMES);
+  const pDueCf = findField(customFields, PLANNED_DUE_NAMES);
+  const pStart = parseCfTimestamp(pStartCf);
+  const pDue = parseCfTimestamp(pDueCf);
+  const aStart = task.startDate ? task.startDate.getTime() : null;
+  const aDue = task.endDate ? task.endDate.getTime() : null;
+
+  const ONE_DAY = 86400000;
+  const plannedDays = pStart && pDue ? Math.round((pDue.getTime() - pStart.getTime()) / ONE_DAY) : null;
+  const executionDays = aStart && aDue ? Math.round((aDue - aStart) / ONE_DAY) : null;
+
+  const delays: DelayType[] = [];
+  if (pStart && pDue && aStart && aDue) {
+    if (aStart > pStart.getTime()) delays.push('Starting Delay');
+    const plannedWindow = pDue.getTime() - pStart.getTime();
+    const actualWindow = aDue - aStart;
+    if ((actualWindow - plannedWindow) > ONE_DAY) delays.push('Project Length Delay');
+    // Completion delay: dateCompleted - actual due date > 1 day
+    const doneTs = task.dateCompleted ? task.dateCompleted.getTime() : null;
+    if (doneTs && (doneTs - aDue) > ONE_DAY) delays.push('Completion Delay');
+  }
+
+  return { delays, plannedDays, executionDays };
+}
+
 export default function TaskDetailPanel() {
   const task = useTaskStore(s => s.detailTask);
   const closeTaskDetail = useTaskStore(s => s.closeTaskDetail);
+  const activeView = useTaskStore(s => s.activeView);
   const [fetchedFields, setFetchedFields] = useState<CustomField[]>([]);
   const [taskDescription, setTaskDescription] = useState<string>('');
   const [taskComments, setTaskComments] = useState<any[]>([]);
@@ -215,10 +257,10 @@ export default function TaskDetailPanel() {
             </div>
           </div>
 
-          {/* Dates */}
+          {/* Execution Dates */}
           <div className="detail-field">
             <div className="detail-field-icon">📅</div>
-            <div className="detail-field-label">Dates</div>
+            <div className="detail-field-label">Execution Dates</div>
             <div className="detail-field-value">
               <div className="detail-dates">
                 <div className="detail-date-row">
@@ -233,6 +275,33 @@ export default function TaskDetailPanel() {
                   </span>
                 </div>
               </div>
+              {/* Execution days summary */}
+              {task.startDate && task.endDate && (() => {
+                const execDays = Math.round((task.endDate.getTime() - task.startDate.getTime()) / 86400000);
+                // Compute delay = execution days - planned days
+                const pStartDate = parseCfTimestamp(plannedStart);
+                const pDueDate = parseCfTimestamp(plannedDue);
+                const plannedDayCount = pStartDate && pDueDate ? Math.round((pDueDate.getTime() - pStartDate.getTime()) / 86400000) : null;
+                const delayDays = plannedDayCount !== null ? execDays - plannedDayCount : null;
+                return (
+                  <div style={{ marginTop: '6px', fontSize: '11px', display: 'flex', alignItems: 'center', gap: '2px' }}>
+                    {plannedDayCount !== null && delayDays !== null ? (
+                      <span>
+                        <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>({plannedDayCount}d</span>
+                        {delayDays > 0 && (
+                          <span style={{ color: '#f85149', fontWeight: 700 }}> +{delayDays}d</span>
+                        )}
+                        {delayDays < 0 && (
+                          <span style={{ color: '#3fb950', fontWeight: 700 }}> {delayDays}d</span>
+                        )}
+                        <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>)</span>
+                      </span>
+                    ) : (
+                      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>({execDays}d)</span>
+                    )}
+                  </div>
+                );
+              })()}
             </div>
           </div>
 
@@ -240,7 +309,7 @@ export default function TaskDetailPanel() {
           {(plannedStart || plannedDue) && (
             <div className="detail-field">
               <div className="detail-field-icon">📋</div>
-              <div className="detail-field-label">Planned</div>
+              <div className="detail-field-label">Planned Dates</div>
               <div className="detail-field-value">
                 <div className="detail-dates">
                   <div className="detail-date-row">
@@ -257,22 +326,188 @@ export default function TaskDetailPanel() {
                     </span>
                   </div>
                 </div>
+                {/* Planned days summary */}
+                {(() => {
+                  const pStartDate = parseCfTimestamp(plannedStart);
+                  const pDueDate = parseCfTimestamp(plannedDue);
+                  if (!pStartDate || !pDueDate) return null;
+                  const days = Math.round((pDueDate.getTime() - pStartDate.getTime()) / 86400000);
+                  return (
+                    <div style={{ marginTop: '6px', fontSize: '11px' }}>
+                      <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>({days}d)</span>
+                    </div>
+                  );
+                })()}
               </div>
             </div>
           )}
 
-          {/* ── Delay Duration (custom field) ── */}
-          {delayDuration && (
+          {/* ── Date Done ── */}
+          {task.dateCompleted && (
             <div className="detail-field">
-              <div className="detail-field-icon">⚠️</div>
-              <div className="detail-field-label">Delay</div>
+              <div className="detail-field-icon">✅</div>
+              <div className="detail-field-label">Date Done</div>
               <div className="detail-field-value">
-                <span className={`detail-delay-badge ${hasDelay ? 'detail-delay-red' : 'detail-delay-green'}`}>
-                  {delayVal} {delayVal === 1 ? 'day' : 'days'}
+                <span style={{ color: '#3fb950', fontWeight: 600 }}>
+                  {formatFullDate(task.dateCompleted)}
                 </span>
               </div>
             </div>
           )}
+
+          {/* ── Delay Duration (computed: date done - actual due date) ── */}
+          {task.dateCompleted && task.endDate && (() => {
+            // Normalize to midnight to avoid time-of-day rounding issues
+            const doneDay = new Date(task.dateCompleted.getFullYear(), task.dateCompleted.getMonth(), task.dateCompleted.getDate());
+            const dueDay = new Date(task.endDate.getFullYear(), task.endDate.getMonth(), task.endDate.getDate());
+            const delayDays = Math.round((doneDay.getTime() - dueDay.getTime()) / 86400000);
+            const isDelayed = delayDays > 0;
+            const isEarly = delayDays < 0;
+            return (
+              <div className="detail-field">
+                <div className="detail-field-icon">⏱</div>
+                <div className="detail-field-label">Delay Duration</div>
+                <div className="detail-field-value">
+                  <span style={{
+                    fontWeight: 700,
+                    color: isDelayed ? '#f85149' : isEarly ? '#3fb950' : '#8b949e',
+                  }}>
+                    {isDelayed ? `+${delayDays} day${delayDays !== 1 ? 's' : ''}` : isEarly ? `${delayDays} day${Math.abs(delayDays) !== 1 ? 's' : ''} (early)` : `${delayDays} days`}
+                  </span>
+                </div>
+              </div>
+            );
+          })()}
+
+          {/* ── Delay Analysis (Gantt view only) ── */}
+          {activeView === 'gantt' && (() => {
+            const { delays, plannedDays, executionDays } = computeDelays(task, customFields);
+            const hasAnyData = delays.length > 0 || plannedDays !== null || executionDays !== null;
+            if (!hasAnyData) return null;
+
+            const DELAY_COLORS: Record<string, string> = {
+              'Starting Delay': '#6e7681',
+              'Project Length Delay': '#da3633',
+              'Completion Delay': '#f85149',
+            };
+            const DELAY_ICONS: Record<string, string> = {
+              'Starting Delay': '⏳',
+              'Project Length Delay': '📏',
+              'Completion Delay': '🏁',
+            };
+
+            return (
+              <div className="detail-field" style={{ gridColumn: '1 / -1' }}>
+                <div className="detail-field-icon">📊</div>
+                <div className="detail-field-label">Delay Analysis</div>
+                <div className="detail-field-value">
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: '10px', width: '100%' }}>
+                    {/* Delay types */}
+                    {delays.length > 0 ? (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: '6px' }}>
+                        {delays.map(d => (
+                          <span
+                            key={d}
+                            style={{
+                              display: 'inline-flex',
+                              alignItems: 'center',
+                              gap: '4px',
+                              padding: '3px 10px',
+                              borderRadius: '12px',
+                              fontSize: '11px',
+                              fontWeight: 600,
+                              background: `${DELAY_COLORS[d]}20`,
+                              border: `1px solid ${DELAY_COLORS[d]}`,
+                              color: DELAY_COLORS[d],
+                            }}
+                          >
+                            {DELAY_ICONS[d]} {d}
+                          </span>
+                        ))}
+                      </div>
+                    ) : (
+                      <span style={{
+                        display: 'inline-flex',
+                        alignItems: 'center',
+                        gap: '4px',
+                        padding: '3px 10px',
+                        borderRadius: '12px',
+                        fontSize: '11px',
+                        fontWeight: 600,
+                        background: 'rgba(63, 185, 80, 0.15)',
+                        border: '1px solid #3fb950',
+                        color: '#3fb950',
+                        width: 'fit-content',
+                      }}>
+                        ✅ No Delays
+                      </span>
+                    )}
+
+                    {/* Planned vs Execution days comparison */}
+                    {(plannedDays !== null || executionDays !== null) && (
+                      <div style={{
+                        display: 'flex',
+                        gap: '12px',
+                        alignItems: 'center',
+                        padding: '8px 12px',
+                        background: 'var(--bg-tertiary)',
+                        borderRadius: '8px',
+                        border: '1px solid var(--border-primary)',
+                      }}>
+                        {plannedDays !== null && (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)' }}>Planned</span>
+                            <span style={{ fontSize: '16px', fontWeight: 700, color: '#8b949e' }}>{plannedDays}d</span>
+                          </div>
+                        )}
+                        {plannedDays !== null && executionDays !== null && (
+                          <span style={{ fontSize: '14px', color: 'var(--text-muted)' }}>→</span>
+                        )}
+                        {executionDays !== null && (
+                          <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '2px' }}>
+                            <span style={{ fontSize: '9px', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.5px', color: 'var(--text-muted)' }}>Execution</span>
+                            <span style={{
+                              fontSize: '16px',
+                              fontWeight: 700,
+                              color: plannedDays !== null && executionDays > plannedDays ? '#f85149' : '#3fb950',
+                            }}>{executionDays}d</span>
+                          </div>
+                        )}
+                        {plannedDays !== null && executionDays !== null && (
+                          <div style={{
+                            marginLeft: 'auto',
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '2px 8px',
+                            borderRadius: '10px',
+                            fontSize: '11px',
+                            fontWeight: 700,
+                            background: executionDays > plannedDays
+                              ? 'rgba(248, 81, 73, 0.15)'
+                              : executionDays < plannedDays
+                              ? 'rgba(63, 185, 80, 0.15)'
+                              : 'rgba(139, 148, 158, 0.15)',
+                            color: executionDays > plannedDays
+                              ? '#f85149'
+                              : executionDays < plannedDays
+                              ? '#3fb950'
+                              : '#8b949e',
+                          }}>
+                            {executionDays > plannedDays
+                              ? `+${executionDays - plannedDays}d over`
+                              : executionDays < plannedDays
+                              ? `${plannedDays - executionDays}d early`
+                              : 'On time'}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            );
+          })()}
 
           {/* Duration */}
           <div className="detail-field">
