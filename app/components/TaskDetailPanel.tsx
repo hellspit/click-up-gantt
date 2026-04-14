@@ -17,10 +17,9 @@ function getStatusColor(status: string, color: string): string {
 function formatFullDate(d: Date | null): string {
   if (!d) return '—';
   return d.toLocaleDateString('en-US', {
-    weekday: 'short',
     month: 'short',
     day: 'numeric',
-    year: 'numeric',
+    year: '2-digit',
   });
 }
 
