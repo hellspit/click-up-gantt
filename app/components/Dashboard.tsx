@@ -8,7 +8,9 @@ import TaskTree from './TaskTree';
 import GanttChart from './GanttChart';
 import SkeletonLoader from './SkeletonLoader';
 
-const ROW_HEIGHT = 40;
+const ROW_HEIGHT = 60;
+
+
 
 export default function Dashboard() {
   const { tasks, treeRows, timelineConfig, loading, loadingProgress, collapsedGroups, selectedUserName } = useTaskStore();
@@ -18,6 +20,8 @@ export default function Dashboard() {
   const ganttHeaderRef = useRef<HTMLDivElement>(null);
 
   const visibleRows = getVisibleRows(treeRows, collapsedGroups);
+
+
 
   const handleGanttScroll = useCallback(() => {
     if (!ganttBodyRef.current) return;

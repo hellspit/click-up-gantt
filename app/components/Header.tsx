@@ -1,6 +1,7 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
+import { NormalizedTask } from '../types';
 import { useTaskStore } from '../store/useTaskStore';
 
 const VIEW_TABS = [
@@ -321,8 +322,68 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
   );
 }
 
+/** Compute bandwidth info: "Working till" and "Free from" dates */
+function computeBandwidth(tasks: NormalizedTask[], noDateTasks: NormalizedTask[]) {
+  const allTasks = [...tasks, ...noDateTasks];
+
+  // Find tasks that are NOT completed/closed — these are active workload
+  const activeTasks = allTasks.filter(t => {
+    const s = t.status.toLowerCase();
+    return !(s.includes('complete') || s.includes('done') || s.includes('resolved') || s.includes('closed') || s.includes('archived'));
+  });
+
+  // Find the task with the latest end date among active tasks
+  let latestEndDate: Date | null = null;
+  let lastActiveTask: NormalizedTask | null = null;
+  for (const t of activeTasks) {
+    if (t.endDate && (!latestEndDate || t.endDate > latestEndDate)) {
+      latestEndDate = t.endDate;
+      lastActiveTask = t;
+    }
+  }
+
+  // For completed tasks, find the one with the latest completion date
+  const completedTasks = allTasks.filter(t => {
+    const s = t.status.toLowerCase();
+    return s.includes('complete') || s.includes('done') || s.includes('resolved');
+  });
+
+  let latestCompletedDate: Date | null = null;
+  let lastCompletedTask: NormalizedTask | null = null;
+  for (const t of completedTasks) {
+    const d = t.dateCompleted || t.endDate;
+    if (d && (!latestCompletedDate || d > latestCompletedDate)) {
+      latestCompletedDate = d;
+      lastCompletedTask = t;
+    }
+  }
+
+  // "Working till" = latest end date of active tasks; fallback to completed
+  const workingTill = latestEndDate || latestCompletedDate;
+  const lastTask = lastActiveTask || lastCompletedTask;
+
+  // "Free from" = day after workingTill, or "Now" if all tasks are done
+  let freeFrom: Date | null = null;
+  let isFreeNow = false;
+
+  if (!latestEndDate) {
+    isFreeNow = true;
+  } else {
+    const nextDay = new Date(latestEndDate);
+    nextDay.setDate(nextDay.getDate() + 1);
+    freeFrom = nextDay;
+  }
+
+  return { workingTill, freeFrom, isFreeNow, activeTaskCount: activeTasks.length, lastTask };
+}
+
+function formatBandwidthDate(date: Date): string {
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
+}
+
 export default function Header() {
-  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, fetchMembers, fetchTasks, setSelectedUser, setActiveView } = useTaskStore();
+  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, fetchMembers, fetchTasks, setSelectedUser, setActiveView, openTaskDetail } = useTaskStore();
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
@@ -363,19 +424,7 @@ export default function Header() {
     if (selectedUserId) fetchTasks();
   };
 
-  const handleExport = () => {
-    const svg = document.querySelector('.gantt-bars-svg') as SVGSVGElement;
-    if (!svg) return;
-    const clone = svg.cloneNode(true) as SVGSVGElement;
-    clone.setAttribute('xmlns', 'http://www.w3.org/2000/svg');
-    const blob = new Blob([clone.outerHTML], { type: 'image/svg+xml' });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement('a');
-    a.href = url;
-    a.download = `gantt-${selectedUserName || 'export'}.svg`;
-    a.click();
-    URL.revokeObjectURL(url);
-  };
+  const bandwidth = useMemo(() => computeBandwidth(tasks, noDateTasks), [tasks, noDateTasks]);
 
   const isTeamMode = mode === 'team';
   const hasIndividualFilter = individualFilter.dateFrom || individualFilter.dateTo || individualFilter.statusFilter.size > 0 || individualFilter.delayFilter.size > 0;
@@ -481,9 +530,38 @@ export default function Header() {
 
           <div className="header-spacer" />
 
-          <button className="btn-export" onClick={handleExport} disabled={tasks.length === 0 || activeView !== 'gantt'}>
-            Export SVG
-          </button>
+          {/* Bandwidth Section */}
+          {hasTasks && (
+            <div className="bandwidth-section">
+              <span className="bandwidth-title">Bandwidth</span>
+              <div className="bandwidth-items">
+                <div
+                  className={`bandwidth-item ${bandwidth.lastTask ? 'bandwidth-item-clickable' : ''}`}
+                  onClick={() => bandwidth.lastTask && openTaskDetail(bandwidth.lastTask)}
+                  title={bandwidth.lastTask ? `Click to view: ${bandwidth.lastTask.name}` : undefined}
+                >
+                  <span className="bandwidth-dot bandwidth-dot-working" />
+                  <span className="bandwidth-key">{bandwidth.lastTask ? bandwidth.lastTask.name : 'last working project'}</span>
+                  <span className="bandwidth-value bandwidth-value-working">
+                    {bandwidth.lastTask
+                      ? `${formatBandwidthDate(bandwidth.lastTask.startDate!)} - ${formatBandwidthDate(bandwidth.lastTask.endDate!)}`
+                      : '—'}
+                  </span>
+                </div>
+                <div className="bandwidth-item">
+                  <span className="bandwidth-dot bandwidth-dot-free" />
+                  <span className="bandwidth-key">Free</span>
+                  <span className="bandwidth-value bandwidth-value-free">
+                    {bandwidth.isFreeNow
+                      ? 'Now'
+                      : bandwidth.freeFrom
+                        ? formatBandwidthDate(bandwidth.freeFrom)
+                        : '—'}
+                  </span>
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       )}
 
@@ -491,10 +569,10 @@ export default function Header() {
       <div className="view-switcher">
         {(isTeamMode
           ? [
-              { key: 'gantt' as const, icon: '', label: 'Pie' },
-              { key: 'list' as const, icon: '', label: 'List' },
-              { key: 'status' as const, icon: '', label: 'Status' },
-            ]
+            { key: 'gantt' as const, icon: '', label: 'Pie' },
+            { key: 'list' as const, icon: '', label: 'List' },
+            { key: 'status' as const, icon: '', label: 'Status' },
+          ]
           : VIEW_TABS
         ).map(tab => (
           <button

@@ -69,6 +69,22 @@ html, body { height: 100%; background: var(--bg-primary); color: var(--text-prim
 /* DASHBOARD GRID */
 .dashboard { display: grid; grid-template-columns: var(--tree-width) 1fr; grid-template-rows: var(--gantt-header-height) 1fr; flex: 1; overflow: hidden; min-height: 0; }
 .dashboard-corner { background: var(--bg-secondary); border-right: 1px solid var(--border-primary); border-bottom: 1px solid var(--border-primary); padding: 0 16px; display: flex; align-items: center; font-size: 11px; text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-tertiary); font-weight: 600; }
+
+/* BANDWIDTH SECTION (in header bar) */
+.bandwidth-section { display: flex; align-items: center; gap: 12px; padding: 6px 16px; background: rgba(255,255,255,0.02); border: 1px solid var(--border-primary); border-radius: 8px; white-space: nowrap; }
+.bandwidth-title { font-size: 9px; font-weight: 700; letter-spacing: 1.2px; color: var(--status-todo); text-transform: uppercase; background: rgba(88, 166, 255, 0.08); padding: 3px 8px; border-radius: 4px; border: 1px solid rgba(88, 166, 255, 0.15); flex-shrink: 0; }
+.bandwidth-items { display: flex; align-items: center; gap: 16px; }
+.bandwidth-item { display: flex; align-items: center; gap: 5px; }
+.bandwidth-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; }
+.bandwidth-dot-working { background: #f0883e; box-shadow: 0 0 6px rgba(240, 136, 62, 0.5); }
+.bandwidth-dot-free { background: #3fb950; box-shadow: 0 0 6px rgba(63, 185, 80, 0.5); }
+.bandwidth-key { font-size: 11px; color: var(--text-muted); font-weight: 500; text-transform: uppercase; letter-spacing: 0.5px; }
+.bandwidth-value { font-size: 12px; font-weight: 700; letter-spacing: 0; font-family: var(--font-mono); }
+.bandwidth-value-working { color: #f0883e; }
+.bandwidth-value-free { color: #3fb950; }
+.bandwidth-item-clickable { cursor: pointer; padding: 2px 6px; border-radius: 4px; margin: -2px -6px; transition: background 0.15s; }
+.bandwidth-item-clickable:hover { background: rgba(240, 136, 62, 0.1); }
+.bandwidth-item-clickable:hover .bandwidth-value-working { text-decoration: underline; }
 .gantt-header-wrap { background: var(--bg-secondary); border-bottom: 1px solid var(--border-primary); overflow: hidden; }
 .task-tree-wrap { background: var(--bg-primary); border-right: 1px solid var(--border-primary); overflow: hidden; }
 .gantt-body-wrap { background: var(--bg-primary); overflow: auto; }
