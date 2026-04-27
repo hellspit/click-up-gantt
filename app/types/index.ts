@@ -39,10 +39,13 @@ export type TreeRow =
   | { type: 'list'; name: string; id: string; depth: number; collapsed: boolean; taskCount: number }
   | { type: 'task'; task: NormalizedTask; depth: number; isSubtask: boolean };
 
+export type GanttScale = 'day' | 'week' | 'month' | 'quarter';
+
 export interface TimelineConfig {
   startDate: Date;
   endDate: Date;
   pxPerDay: number;
   totalDays: number;
   totalWidth: number;
+  scale: GanttScale;
 }

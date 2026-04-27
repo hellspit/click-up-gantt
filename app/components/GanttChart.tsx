@@ -1,7 +1,9 @@
 'use client';
 
-import { TreeRow, TimelineConfig, CustomField } from '../types';
-import { dateToPx, durationToPx, formatShortDate, getDayOfWeekLetter, isSameDay, isWeekend } from '../utils/dateUtils';
+import { useState } from 'react';
+
+import { TreeRow, TimelineConfig, CustomField, GanttScale } from '../types';
+import { dateToPx, durationToPx, formatShortDate, getDayOfWeekLetter, isSameDay, isWeekend, generateTimeBuckets, TimeBucket, HeaderGroup } from '../utils/dateUtils';
 
 interface Props {
   mode: 'header' | 'body';
@@ -58,77 +60,71 @@ function getStatusLabel(status: string): string {
 }
 
 export default function GanttChart({ mode, rows, config, rowHeight }: Props) {
-  const { startDate, pxPerDay, totalDays, totalWidth } = config;
+  const { startDate, pxPerDay, totalDays, totalWidth, scale } = config;
   const today = new Date();
   const headerHeight = 50;
+  const [highlightedRow, setHighlightedRow] = useState<number | null>(null);
+
+  // Generate time buckets based on scale
+  const endDate = new Date(startDate);
+  endDate.setDate(endDate.getDate() + totalDays);
+  const { buckets, groups } = generateTimeBuckets(scale, startDate, endDate, pxPerDay);
 
   if (mode === 'header') {
-    return renderHeader(startDate, totalDays, pxPerDay, totalWidth, today, headerHeight);
+    return renderHeader(buckets, groups, startDate, pxPerDay, totalWidth, today, headerHeight, scale);
   }
 
-  return renderBody(rows, startDate, pxPerDay, totalWidth, today, rowHeight);
+  return renderBody(rows, buckets, startDate, pxPerDay, totalWidth, today, rowHeight, scale, highlightedRow, setHighlightedRow);
 }
 
-function renderHeader(startDate: Date, totalDays: number, pxPerDay: number, totalWidth: number, today: Date, headerHeight: number) {
-  const days: Date[] = [];
-  for (let i = 0; i < totalDays; i++) {
-    const d = new Date(startDate);
-    d.setDate(d.getDate() + i);
-    days.push(d);
-  }
-
-  // Find month boundaries
-  const months: { label: string; x: number; width: number }[] = [];
-  let currentMonth = -1;
-  let monthStart = 0;
-  for (let i = 0; i < days.length; i++) {
-    const m = days[i].getMonth();
-    if (m !== currentMonth) {
-      if (currentMonth !== -1) {
-        months.push({
-          label: `${['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'][currentMonth]} ${days[i - 1].getDate()}`,
-          x: monthStart * pxPerDay,
-          width: (i - monthStart) * pxPerDay,
-        });
-      }
-      currentMonth = m;
-      monthStart = i;
-    }
-  }
-  if (currentMonth !== -1) {
-    const mNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-    months.push({
-      label: `${mNames[currentMonth]} ${days[days.length - 1].getDate()}`,
-      x: monthStart * pxPerDay,
-      width: (days.length - monthStart) * pxPerDay,
-    });
-  }
-
-  const todayIdx = days.findIndex(d => isSameDay(d, today));
+function renderHeader(
+  buckets: TimeBucket[],
+  groups: HeaderGroup[],
+  startDate: Date,
+  pxPerDay: number,
+  totalWidth: number,
+  today: Date,
+  headerHeight: number,
+  scale: GanttScale
+) {
+  const todayX = dateToPx(today, startDate, pxPerDay);
 
   return (
     <svg width={totalWidth} height={headerHeight} style={{ display: 'block' }}>
-      {/* Month labels */}
-      {months.map((m, i) => (
-        <g key={i}>
-          <text x={m.x + 6} y={16} className="gantt-month-label">{m.label}</text>
-          <line x1={m.x} y1={0} x2={m.x} y2={headerHeight} stroke="#21262d" strokeWidth={1} />
+      {/* Group labels (top row) — months for day/week, years for month/quarter */}
+      {groups.map((g, i) => (
+        <g key={`grp-${i}`}>
+          <text x={g.x + 6} y={16} className="gantt-month-label" fill="#e6edf3">{g.label}</text>
+          <line x1={g.x} y1={0} x2={g.x} y2={headerHeight} stroke="#21262d" strokeWidth={1} />
         </g>
       ))}
 
-      {/* Day columns */}
-      {days.map((d, i) => {
-        const x = i * pxPerDay;
-        const isToday = isSameDay(d, today);
+      {/* Bucket columns (bottom row) */}
+      {buckets.map((b, i) => {
         return (
-          <g key={i}>
-            <line x1={x} y1={24} x2={x} y2={headerHeight} stroke="#21262d" strokeWidth={0.5} />
-            <text x={x + pxPerDay / 2} y={38} textAnchor="middle" className="gantt-day-label" fill={isToday ? '#da3633' : '#e6edf3'}>
-              {getDayOfWeekLetter(d)}
-            </text>
-            {isWeekend(d) && (
-              <text x={x + pxPerDay / 2} y={48} textAnchor="middle" style={{ fontSize: 7, fill: '#484f58' }}>
-                {d.getDate()}
+          <g key={`bkt-${i}`}>
+            <line x1={b.x} y1={24} x2={b.x} y2={headerHeight} stroke="#21262d" strokeWidth={0.5} />
+            {b.width >= 12 && (
+              <text
+                x={b.x + b.width / 2}
+                y={38}
+                textAnchor="middle"
+                className="gantt-day-label"
+                fill={b.isToday ? '#da3633' : '#e6edf3'}
+              >
+                {b.label}
+              </text>
+            )}
+            {/* For day scale, show date number on weekends */}
+            {scale === 'day' && isWeekend(b.start) && (
+              <text x={b.x + b.width / 2} y={48} textAnchor="middle" style={{ fontSize: 7, fill: '#484f58' }}>
+                {b.start.getDate()}
+              </text>
+            )}
+            {/* For week scale, show date range below */}
+            {scale === 'week' && b.width >= 30 && (
+              <text x={b.x + b.width / 2} y={48} textAnchor="middle" style={{ fontSize: 7, fill: '#484f58' }}>
+                {`${b.start.getDate()}-${new Date(b.end.getTime() - 86400000).getDate()}`}
               </text>
             )}
           </g>
@@ -136,12 +132,27 @@ function renderHeader(startDate: Date, totalDays: number, pxPerDay: number, tota
       })}
 
       {/* TODAY marker */}
-      {todayIdx >= 0 && (
-        <g>
-          <rect x={todayIdx * pxPerDay - 1} y={0} width={pxPerDay + 2} height={20} rx={3} fill="#da3633" />
-          <text x={todayIdx * pxPerDay + pxPerDay / 2} y={14} textAnchor="middle" className="gantt-today-label">TODAY</text>
-        </g>
-      )}
+      {(() => {
+        const todayBucket = buckets.find(b => b.isToday);
+        if (!todayBucket) return null;
+
+        if (scale === 'day') {
+          return (
+            <g>
+              <rect x={todayBucket.x - 1} y={0} width={todayBucket.width + 2} height={20} rx={3} fill="#da3633" />
+              <text x={todayBucket.x + todayBucket.width / 2} y={14} textAnchor="middle" className="gantt-today-label">TODAY</text>
+            </g>
+          );
+        } else {
+          // For larger scales, show a thin line with a small marker
+          return (
+            <g>
+              <rect x={todayX - 8} y={0} width={40} height={16} rx={3} fill="#da3633" />
+              <text x={todayX + 12} y={12} textAnchor="middle" style={{ fontSize: 8, fill: '#fff', fontWeight: 700 }}>TODAY</text>
+            </g>
+          );
+        }
+      })()}
     </svg>
   );
 }
@@ -156,12 +167,20 @@ function parseCustomFieldDate(cf: CustomField | undefined): Date | null {
   return null;
 }
 
-function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWidth: number, today: Date, rowHeight: number) {
+function renderBody(
+  rows: TreeRow[],
+  buckets: TimeBucket[],
+  startDate: Date,
+  pxPerDay: number,
+  totalWidth: number,
+  today: Date,
+  rowHeight: number,
+  scale: GanttScale,
+  highlightedRow: number | null,
+  setHighlightedRow: (idx: number | null) => void
+) {
   const totalHeight = rows.length * rowHeight;
   const todayX = dateToPx(today, startDate, pxPerDay);
-
-  // Build day grid for background
-  const totalDays = Math.ceil(totalWidth / pxPerDay);
 
   // Dual-line layout: top half = delay line, bottom half = main line
   const lineThickness = 6;
@@ -169,22 +188,44 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
   return (
     <svg className="gantt-bars-svg" width={totalWidth} height={totalHeight} style={{ display: 'block' }}>
 
-      {/* Weekend shading */}
-      {Array.from({ length: totalDays }).map((_, i) => {
-        const d = new Date(startDate);
-        d.setDate(d.getDate() + i);
-        if (!isWeekend(d)) return null;
-        return <rect key={`w${i}`} x={i * pxPerDay} y={0} width={pxPerDay} height={totalHeight} fill="rgba(255,255,255,0.015)" />;
+      {/* Weekend shading — only for day and week scales */}
+      {(scale === 'day') && buckets.map((b, i) => {
+        if (!isWeekend(b.start)) return null;
+        return <rect key={`w${i}`} x={b.x} y={0} width={b.width} height={totalHeight} fill="rgba(255,255,255,0.015)" />;
       })}
 
-      {/* Vertical grid lines */}
-      {Array.from({ length: totalDays }).map((_, i) => (
-        <line key={`g${i}`} x1={i * pxPerDay} y1={0} x2={i * pxPerDay} y2={totalHeight} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
+      {/* Vertical grid lines at bucket boundaries */}
+      {buckets.map((b, i) => (
+        <line key={`g${i}`} x1={b.x} y1={0} x2={b.x} y2={totalHeight} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
       ))}
 
-      {/* Horizontal row lines */}
+      {/* Highlighted row background */}
+      {highlightedRow !== null && (
+        <rect
+          x={0}
+          y={highlightedRow * rowHeight}
+          width={totalWidth}
+          height={rowHeight}
+          fill="rgba(255,255,255,0.06)"
+          style={{ pointerEvents: 'none' }}
+        />
+      )}
+
+      {/* Clickable row hit areas + horizontal row lines */}
       {rows.map((_, i) => (
-        <line key={`h${i}`} x1={0} y1={(i + 1) * rowHeight} x2={totalWidth} y2={(i + 1) * rowHeight} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
+        <g key={`h${i}`}>
+          <rect
+            x={0}
+            y={i * rowHeight}
+            width={totalWidth}
+            height={rowHeight}
+            fill="transparent"
+            style={{ cursor: 'pointer' }}
+            onMouseEnter={() => setHighlightedRow(i)}
+            onMouseLeave={() => setHighlightedRow(null)}
+          />
+          <line x1={0} y1={(i + 1) * rowHeight} x2={totalWidth} y2={(i + 1) * rowHeight} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
+        </g>
       ))}
 
       {/* Task bars */}
@@ -375,7 +416,7 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
                   x2={compDelayX + compDelayW}
                   y2={bottomLineY + lineThickness / 2}
                   stroke="#f0883e"
-                  strokeWidth={lineThickness}
+                  strokeWidth={lineThickness - 2}
                   strokeDasharray="10 4"
                   strokeLinecap="butt"
                   opacity={0.7}
