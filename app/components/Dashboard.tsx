@@ -9,7 +9,7 @@ import GanttChart from './GanttChart';
 import SkeletonLoader from './SkeletonLoader';
 import { GanttScale } from '../types';
 
-const ROW_HEIGHT = 80;
+const ROW_HEIGHT = 56;
 
 const SCALE_ORDER: GanttScale[] = ['quarter', 'month', 'week', 'day'];
 
@@ -40,8 +40,8 @@ export default function Dashboard() {
       const todayPx = dateToPx(today, timelineConfig.startDate, timelineConfig.pxPerDay);
       const containerWidth = ganttBodyRef.current.clientWidth;
 
-      // Scroll so TODAY is about 1/3 from the left edge
-      const scrollTarget = Math.max(0, todayPx - containerWidth * 0.33);
+      // Scroll so TODAY is centered in the viewport
+      const scrollTarget = Math.max(0, todayPx - containerWidth * 0.5);
       ganttBodyRef.current.scrollLeft = scrollTarget;
 
       // Sync the header

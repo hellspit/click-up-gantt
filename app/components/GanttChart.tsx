@@ -237,8 +237,8 @@ function renderBody(
 
         // === Dual-line Y positioning ===
         const rowTop = i * rowHeight;
-        const topLineY = rowTop + 20;    // Line 1: planned timeline
-        const bottomLineY = rowTop + 50; // Line 2: actual + delays
+        const topLineY = rowTop + 12;    // Line 1: planned timeline
+        const bottomLineY = rowTop + 30; // Line 2: actual + delays
 
         const x = dateToPx(t.startDate, startDate, pxPerDay);
         const w = durationToPx(t.startDate, t.endDate, pxPerDay);
@@ -307,27 +307,26 @@ function renderBody(
               <>
                 {/* Planned bar: solid, slightly transparent */}
                 <rect x={plannedX} y={topLineY} width={plannedW} height={lineThickness} rx={3} fill={color} opacity={0.4} />
-                {/* "planned" label before bar */}
+                {/* Planned start date on the LEFT of the bar */}
                 <text
                   x={plannedX - 4}
                   y={topLineY + 5}
-                  fill="#6e7681"
+                  fill="#8b949e"
                   fontSize={9}
                   fontFamily="var(--font-sans)"
-                  fontStyle="italic"
                   textAnchor="end"
                 >
-                  planned
+                  {plannedStartDate ? formatDateCompact(plannedStartDate) : ''}
                 </text>
-                {/* Planned date range label after bar */}
+                {/* Planned due date on the RIGHT of the bar */}
                 <text
                   x={plannedX + plannedW + 6}
                   y={topLineY + 5}
                   fill="#8b949e"
-                  fontSize={10}
+                  fontSize={9}
                   fontFamily="var(--font-sans)"
                 >
-                  {plannedLabel}
+                  {plannedDueDate ? formatDateCompact(plannedDueDate) : ''}
                 </text>
               </>
             ) : (
@@ -346,17 +345,16 @@ function renderBody(
             )}
 
             {/* ====================== LINE 2 (BOTTOM): ACTUAL + DELAYS ====================== */}
-            {/* "actual" label before bar */}
+            {/* Actual start date on the LEFT of the bar */}
             <text
               x={(hasPlannedDates ? plannedX : x) - 4}
               y={bottomLineY + 5}
-              fill="#6e7681"
+              fill="#8b949e"
               fontSize={9}
               fontFamily="var(--font-sans)"
-              fontStyle="italic"
               textAnchor="end"
             >
-              actual
+              {t.startDate ? formatDateCompact(t.startDate) : ''}
             </text>
 
             {/* Part 1: Solid bar — planned start to planned due (or actual if no planned dates) */}
@@ -370,9 +368,9 @@ function renderBody(
               opacity={0.9}
             />
 
-            {/* Status label ABOVE bar */}
+            {/* Status label BELOW bar */}
             {(hasPlannedDates ? plannedW : w) > 60 && (
-              <text x={hasPlannedDates ? plannedX : x} y={bottomLineY - 4} fill={color} fontSize={10} fontWeight={600} fontFamily="var(--font-sans)">
+              <text x={hasPlannedDates ? plannedX : x} y={bottomLineY + lineThickness + 10} fill={color} fontSize={9} fontWeight={600} fontFamily="var(--font-sans)">
                 {label}
               </text>
             )}
@@ -394,7 +392,7 @@ function renderBody(
                 {projDelayW > 20 && (
                   <text
                     x={projDelayX + projDelayW / 2}
-                    y={bottomLineY - 4}
+                    y={bottomLineY + lineThickness + 10}
                     textAnchor="middle"
                     fill="#da3633"
                     fontSize={9}
@@ -424,7 +422,7 @@ function renderBody(
                 {compDelayW > 20 && (
                   <text
                     x={compDelayX + compDelayW / 2}
-                    y={bottomLineY - 4}
+                    y={bottomLineY + lineThickness + 10}
                     textAnchor="middle"
                     fill="#f0883e"
                     fontSize={9}
@@ -437,21 +435,19 @@ function renderBody(
               </>
             )}
 
-            {/* Actual date range label after all bars */}
+            {/* Actual end date on the RIGHT after all bars */}
             <text
               x={(hasPlannedDates ? plannedX + plannedW : x + w) + (hasProjectLengthDelay ? projDelayW : 0) + (hasCompletionDelay ? compDelayW : 0) + 6}
               y={bottomLineY + 5}
               fill="#8b949e"
-              fontSize={10}
+              fontSize={9}
               fontFamily="var(--font-sans)"
             >
-              {t.startDate && t.endDate
-                ? `${formatDateCompact(t.startDate)} - ${formatDateCompact(t.endDate)} (${daysBetween(t.startDate, t.endDate)}d)`
-                : t.startDate
-                  ? formatDateCompact(t.startDate)
-                  : t.endDate
-                    ? formatDateCompact(t.endDate)
-                    : ''}
+              {t.dateCompleted
+                ? formatDateCompact(t.dateCompleted)
+                : t.endDate
+                  ? formatDateCompact(t.endDate)
+                  : ''}
             </text>
           </g>
         );
