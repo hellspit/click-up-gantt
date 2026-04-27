@@ -8,7 +8,7 @@ import TaskTree from './TaskTree';
 import GanttChart from './GanttChart';
 import SkeletonLoader from './SkeletonLoader';
 
-const ROW_HEIGHT = 60;
+const ROW_HEIGHT = 80;
 
 
 

@@ -5,7 +5,7 @@ export async function GET(req: NextRequest) {
   const apiKey = process.env.CLICKUP_API_KEY;
 
   if (!apiKey) {
-    return NextResponse.json({ error: 'CLICKUP_API_KEY not set' }, { status: 500 });
+    return NextResponse.json({ error: 'CLICKUP_API_KEY not set' },{ status: 500 });
   }
 
   const taskId = req.nextUrl.searchParams.get('taskId');

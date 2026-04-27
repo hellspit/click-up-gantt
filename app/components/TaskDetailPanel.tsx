@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
 import { CustomField, NormalizedTask } from '../types';
 
@@ -137,6 +137,308 @@ function computeDelays(task: NormalizedTask, customFields: CustomField[]): {
   }
 
   return { delays, plannedDays, executionDays, startingDelayDays, projectLengthDelayDays, completionDelayDays };
+}
+
+// ── AI Delay Reasoning Section ──
+
+interface AIAnalysis {
+  technical: string;
+  nonTechnical: string;
+  commentSummary: string;
+}
+
+function DelayReasoningSection({
+  task,
+  comments,
+  description,
+  customFields,
+}: {
+  task: NormalizedTask;
+  comments: any[];
+  description: string;
+  customFields: CustomField[];
+}) {
+  const [analysis, setAnalysis] = useState<AIAnalysis | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  // Compute delay info for the prompt
+  const delayInfo = (() => {
+    const result = computeDelays(task, customFields);
+    return {
+      startingDelayDays: result.startingDelayDays,
+      projectLengthDelayDays: result.projectLengthDelayDays,
+      completionDelayDays: result.completionDelayDays,
+      plannedDays: result.plannedDays,
+      executionDays: result.executionDays,
+    };
+  })();
+
+  const analyze = useCallback(async (skipCache = false) => {
+    setLoading(true);
+    setError(null);
+
+    try {
+      const res = await fetch('/api/analyze-delay', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          taskId: task.id,
+          taskName: task.name,
+          description,
+          comments: comments.map((c: any) => ({
+            user: c.user?.username || 'Unknown',
+            text: c.comment_text || '',
+          })),
+          delayInfo,
+          skipCache,
+        }),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || `API error: ${res.status}`);
+      }
+
+      const data = await res.json();
+      setAnalysis(data);
+    } catch (err: any) {
+      setError(err.message || 'Failed to analyze');
+    } finally {
+      setLoading(false);
+    }
+  }, [task.id, task.name, description, comments, delayInfo]);
+
+  // Reset when task changes
+  useEffect(() => {
+    setAnalysis(null);
+    setError(null);
+  }, [task.id]);
+
+  const hasComments = comments.length > 0;
+
+  return (
+    <div style={{
+      margin: '0 20px 20px',
+      padding: '16px',
+      background: 'var(--bg-tertiary)',
+      borderRadius: '12px',
+      border: '1px solid var(--border-primary)',
+    }}>
+      {/* Section Header */}
+      <div style={{
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+        marginBottom: analysis ? '14px' : '0',
+      }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+          <span style={{ fontSize: '14px' }}>🤖</span>
+          <span style={{
+            fontSize: '12px',
+            fontWeight: 700,
+            textTransform: 'uppercase',
+            letterSpacing: '0.8px',
+            color: 'var(--text-tertiary)',
+          }}>AI Delay Analysis</span>
+        </div>
+
+        {!analysis && !loading && (
+          <button
+            onClick={() => {
+              if (!hasComments) return;
+              analyze(false);
+            }}
+            disabled={!hasComments}
+            title={!hasComments ? 'No comments available to analyze' : 'Analyze task delay using AI'}
+            style={{
+              padding: '6px 16px',
+              borderRadius: '6px',
+              border: 'none',
+              fontSize: '11px',
+              fontWeight: 700,
+              cursor: hasComments ? 'pointer' : 'not-allowed',
+              background: hasComments
+                ? 'linear-gradient(135deg, #7c3aed, #6366f1)'
+                : 'var(--bg-secondary)',
+              color: hasComments ? '#fff' : 'var(--text-muted)',
+              transition: 'all 0.2s',
+              boxShadow: hasComments ? '0 2px 8px rgba(124, 58, 237, 0.3)' : 'none',
+              letterSpacing: '0.3px',
+            }}
+            onMouseEnter={e => {
+              if (hasComments) {
+                e.currentTarget.style.transform = 'translateY(-1px)';
+                e.currentTarget.style.boxShadow = '0 4px 12px rgba(124, 58, 237, 0.4)';
+              }
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.transform = 'translateY(0)';
+              e.currentTarget.style.boxShadow = hasComments ? '0 2px 8px rgba(124, 58, 237, 0.3)' : 'none';
+            }}
+          >
+            {hasComments ? 'Analyze Delay with AI' : 'No Comments to Analyze'}
+          </button>
+        )}
+
+        {analysis && !loading && (
+          <button
+            onClick={() => analyze(true)}
+            style={{
+              padding: '5px 12px',
+              borderRadius: '6px',
+              border: '1px solid var(--border-secondary)',
+              background: 'transparent',
+              color: 'var(--text-tertiary)',
+              fontSize: '10px',
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'all 0.2s',
+            }}
+            onMouseEnter={e => {
+              e.currentTarget.style.borderColor = '#7c3aed';
+              e.currentTarget.style.color = '#7c3aed';
+            }}
+            onMouseLeave={e => {
+              e.currentTarget.style.borderColor = 'var(--border-secondary)';
+              e.currentTarget.style.color = 'var(--text-tertiary)';
+            }}
+          >
+            ↻ Regenerate
+          </button>
+        )}
+      </div>
+
+      {/* Loading state */}
+      {loading && (
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          gap: '10px',
+          padding: '20px 0',
+          justifyContent: 'center',
+        }}>
+          <span className="loading-spinner" style={{ width: 16, height: 16 }} />
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>
+            Analyzing task comments with AI...
+          </span>
+        </div>
+      )}
+
+      {/* Error state */}
+      {error && (
+        <div style={{
+          padding: '10px 14px',
+          background: 'rgba(248, 81, 73, 0.08)',
+          border: '1px solid rgba(248, 81, 73, 0.2)',
+          borderRadius: '8px',
+          fontSize: '12px',
+          color: '#f85149',
+          marginTop: '10px',
+        }}>
+          ⚠ {error}
+        </div>
+      )}
+
+      {/* Analysis results */}
+      {analysis && !loading && (
+        <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
+          {/* Comment Summary */}
+          <div style={{
+            padding: '12px 14px',
+            background: 'rgba(99, 102, 241, 0.06)',
+            border: '1px solid rgba(99, 102, 241, 0.15)',
+            borderRadius: '10px',
+          }}>
+            <div style={{
+              fontSize: '10px',
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.8px',
+              color: '#6366f1',
+              marginBottom: '8px',
+              display: 'flex',
+              alignItems: 'center',
+              gap: '6px',
+            }}>
+              <span>💬</span> Comment Summary
+            </div>
+            <p style={{
+              fontSize: '12px',
+              lineHeight: '1.6',
+              color: 'var(--text-secondary)',
+              margin: 0,
+            }}>
+              {analysis.commentSummary}
+            </p>
+          </div>
+
+          {/* Two-column: Technical + Non-Technical */}
+          <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '12px' }}>
+            {/* Technical */}
+            <div style={{
+              padding: '12px 14px',
+              background: 'rgba(251, 146, 60, 0.06)',
+              border: '1px solid rgba(251, 146, 60, 0.15)',
+              borderRadius: '10px',
+            }}>
+              <div style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.8px',
+                color: '#fb923c',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}>
+                <span>🔧</span> Technical Reasoning
+              </div>
+              <p style={{
+                fontSize: '12px',
+                lineHeight: '1.6',
+                color: 'var(--text-secondary)',
+                margin: 0,
+              }}>
+                {analysis.technical}
+              </p>
+            </div>
+
+            {/* Non-Technical */}
+            <div style={{
+              padding: '12px 14px',
+              background: 'rgba(34, 197, 94, 0.06)',
+              border: '1px solid rgba(34, 197, 94, 0.15)',
+              borderRadius: '10px',
+            }}>
+              <div style={{
+                fontSize: '10px',
+                fontWeight: 700,
+                textTransform: 'uppercase',
+                letterSpacing: '0.8px',
+                color: '#22c55e',
+                marginBottom: '8px',
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+              }}>
+                <span>📋</span> Non-Technical Summary
+              </div>
+              <p style={{
+                fontSize: '12px',
+                lineHeight: '1.6',
+                color: 'var(--text-secondary)',
+                margin: 0,
+              }}>
+                {analysis.nonTechnical}
+              </p>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function TaskDetailPanel() {
@@ -590,6 +892,14 @@ export default function TaskDetailPanel() {
             </div>
           </div>
         )}
+        {/* AI Delay Reasoning */}
+        <DelayReasoningSection
+          task={task}
+          comments={taskComments}
+          description={taskDescription}
+          customFields={customFields}
+        />
+
         {/* Open in ClickUp */}
         {task.url && (
           <div className="detail-actions">

@@ -382,15 +382,48 @@ function formatBandwidthDate(date: Date): string {
   return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
 }
 
+type DurationPreset = 'all' | 'week' | 'month' | 'quarter' | 'future';
+
+const DURATION_PRESETS: { value: DurationPreset; label: string }[] = [
+  { value: 'all', label: 'All Time' },
+  { value: 'week', label: 'Last Week' },
+  { value: 'month', label: 'Last Month' },
+  { value: 'quarter', label: 'Last Quarter' },
+  { value: 'future', label: 'Future' },
+];
+
+function getDurationDates(preset: DurationPreset): { dateFrom: string | null; dateTo: string | null } {
+  if (preset === 'all') return { dateFrom: null, dateTo: null };
+
+  const now = new Date();
+  const fmt = (d: Date) => d.toISOString().split('T')[0];
+
+  if (preset === 'future') {
+    return { dateFrom: fmt(now), dateTo: null };
+  }
+
+  const days = preset === 'week' ? 7 : preset === 'month' ? 30 : 120;
+  const from = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
+  return { dateFrom: fmt(from), dateTo: fmt(now) };
+}
+
 export default function Header() {
-  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, fetchMembers, fetchTasks, setSelectedUser, setActiveView, openTaskDetail } = useTaskStore();
+  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, fetchMembers, fetchTasks, setSelectedUser, setActiveView, openTaskDetail, applyIndividualFilter, clearIndividualFilter } = useTaskStore();
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
+  const [activeDuration, setActiveDuration] = useState<DurationPreset>('all');
   const wrapperRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => { fetchMembers(); }, [fetchMembers]);
+
+  // Reset duration preset when individual filter dates change externally (e.g. cleared or set via filter dropdown)
+  useEffect(() => {
+    if (!individualFilter.dateFrom && !individualFilter.dateTo && activeDuration !== 'all') {
+      setActiveDuration('all');
+    }
+  }, [individualFilter.dateFrom, individualFilter.dateTo]);
 
   useEffect(() => {
     const handler = (e: MouseEvent) => {
@@ -528,6 +561,37 @@ export default function Header() {
             </div>
           )}
 
+          {/* Duration Dropdown */}
+          {hasTasks && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <label style={{
+                fontSize: '11px',
+                fontWeight: 600,
+                color: 'var(--text-tertiary)',
+                textTransform: 'uppercase',
+                letterSpacing: '0.5px',
+              }}>Duration</label>
+              <select
+                className="pie-filter-select"
+                value={activeDuration}
+                onChange={e => {
+                  const val = e.target.value as DurationPreset;
+                  setActiveDuration(val);
+                  const dates = getDurationDates(val);
+                  if (val === 'all') {
+                    applyIndividualFilter({ dateFrom: null, dateTo: null });
+                  } else {
+                    applyIndividualFilter(dates);
+                  }
+                }}
+              >
+                {DURATION_PRESETS.map(o => (
+                  <option key={o.value} value={o.value}>{o.label}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
           <div className="header-spacer" />
 
           {/* Bandwidth Section */}
@@ -569,10 +633,10 @@ export default function Header() {
       <div className="view-switcher">
         {(isTeamMode
           ? [
-            { key: 'gantt' as const, icon: '', label: 'Pie' },
-            { key: 'list' as const, icon: '', label: 'List' },
-            { key: 'status' as const, icon: '', label: 'Status' },
-          ]
+              { key: 'gantt' as const, icon: '', label: 'Pie' },
+              { key: 'list' as const, icon: '', label: 'List' },
+              { key: 'status' as const, icon: '', label: 'Status' },
+            ]
           : VIEW_TABS
         ).map(tab => (
           <button

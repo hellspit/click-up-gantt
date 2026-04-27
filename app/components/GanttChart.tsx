@@ -166,75 +166,8 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
   // Dual-line layout: top half = delay line, bottom half = main line
   const lineThickness = 6;
 
-  // Collect delay bar info for generating unique gradient defs
-  const delayBars: { id: string }[] = [];
-  const projDelayBars: { id: string }[] = [];
-  const compDelayBars: { id: string }[] = [];
-  rows.forEach((row, i) => {
-    if (row.type !== 'task') return;
-    const t = row.task;
-    if (!t.startDate || !t.endDate) return;
-    const plannedStartCf = findCustomField(t.customFields, PLANNED_START_NAMES);
-    const plannedStartDate = parseCustomFieldDate(plannedStartCf);
-    // Starting delay gradient
-    if (plannedStartDate && t.startDate.getTime() > plannedStartDate.getTime()) {
-      const delayX = dateToPx(plannedStartDate, startDate, pxPerDay);
-      const taskX = dateToPx(t.startDate, startDate, pxPerDay);
-      const delayW = taskX - delayX;
-      if (delayW > 0) {
-        delayBars.push({ id: `delay-grad-${t.id}-${i}` });
-      }
-    }
-    // Project length delay gradient
-    const plannedDueCf = findCustomField(t.customFields, PLANNED_DUE_NAMES);
-    const plannedDueDate = parseCustomFieldDate(plannedDueCf);
-    const ONE_DAY = 86400000;
-    if (plannedStartDate && plannedDueDate) {
-      const plannedDuration = plannedDueDate.getTime() - plannedStartDate.getTime();
-      const actualDuration = t.endDate.getTime() - t.startDate.getTime();
-      if ((actualDuration - plannedDuration) > ONE_DAY) {
-        projDelayBars.push({ id: `proj-delay-grad-${t.id}-${i}` });
-      }
-    }
-    // Completion delay gradient
-    if (t.dateCompleted && t.endDate) {
-      const doneDay = new Date(t.dateCompleted.getFullYear(), t.dateCompleted.getMonth(), t.dateCompleted.getDate());
-      const dueDay = new Date(t.endDate.getFullYear(), t.endDate.getMonth(), t.endDate.getDate());
-      if (doneDay.getTime() > dueDay.getTime() + ONE_DAY) {
-        compDelayBars.push({ id: `comp-delay-grad-${t.id}-${i}` });
-      }
-    }
-  });
-
   return (
     <svg className="gantt-bars-svg" width={totalWidth} height={totalHeight} style={{ display: 'block' }}>
-      {/* Gradient definitions for delay bars */}
-      <defs>
-        {/* Starting delay: grey gradient */}
-        {delayBars.map(db => (
-          <linearGradient key={db.id} id={db.id} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#6e7681" stopOpacity={0.15} />
-            <stop offset="40%" stopColor="#6e7681" stopOpacity={0.35} />
-            <stop offset="100%" stopColor="#6e7681" stopOpacity={0.6} />
-          </linearGradient>
-        ))}
-        {/* Project length delay: red gradient */}
-        {projDelayBars.map(db => (
-          <linearGradient key={db.id} id={db.id} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#da3633" stopOpacity={0.4} />
-            <stop offset="50%" stopColor="#da3633" stopOpacity={0.7} />
-            <stop offset="100%" stopColor="#da3633" stopOpacity={0.9} />
-          </linearGradient>
-        ))}
-        {/* Completion delay: amber/orange gradient */}
-        {compDelayBars.map(db => (
-          <linearGradient key={db.id} id={db.id} x1="0%" y1="0%" x2="100%" y2="0%">
-            <stop offset="0%" stopColor="#f0883e" stopOpacity={0.4} />
-            <stop offset="50%" stopColor="#f0883e" stopOpacity={0.7} />
-            <stop offset="100%" stopColor="#f0883e" stopOpacity={0.9} />
-          </linearGradient>
-        ))}
-      </defs>
 
       {/* Weekend shading */}
       {Array.from({ length: totalDays }).map((_, i) => {
@@ -263,8 +196,8 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
 
         // === Dual-line Y positioning ===
         const rowTop = i * rowHeight;
-        const mainLineY = rowTop + 24;   // vertically centered slightly above middle of top half
-        const delayLineY = rowTop + 60;  // vertically centered bottom half
+        const topLineY = rowTop + 20;    // Line 1: planned timeline
+        const bottomLineY = rowTop + 50; // Line 2: actual + delays
 
         const x = dateToPx(t.startDate, startDate, pxPerDay);
         const w = durationToPx(t.startDate, t.endDate, pxPerDay);
@@ -274,30 +207,21 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
         // Extract planned dates from custom fields
         const plannedStart = findCustomField(t.customFields, PLANNED_START_NAMES);
         const plannedDue = findCustomField(t.customFields, PLANNED_DUE_NAMES);
-        const hasPlannedDates = plannedStart || plannedDue;
-
-        let plannedLabel = 'Planned dates not present';
         const plannedStartDate = parseCustomFieldDate(plannedStart);
         const plannedDueDate = parseCustomFieldDate(plannedDue);
-        if (hasPlannedDates) {
-          const startStr = plannedStart ? formatPlannedDate(plannedStart) : '—';
-          const dueStr = plannedDue ? formatPlannedDate(plannedDue) : '—';
-          const dayCount = plannedStartDate && plannedDueDate ? daysBetween(plannedStartDate, plannedDueDate) : null;
-          plannedLabel = dayCount !== null ? `${startStr} - ${dueStr} (${dayCount}d)` : `${startStr} - ${dueStr}`;
-        }
+        const hasPlannedDates = !!(plannedStartDate && plannedDueDate);
 
-        // Starting Delay: actual start > planned start
-        const hasStartingDelay = plannedStartDate && t.startDate.getTime() > plannedStartDate.getTime();
-        let startDelayBarX = 0;
-        let startDelayBarW = 0;
-        let startDelayDays = 0;
-        if (hasStartingDelay && plannedStartDate) {
-          startDelayBarX = dateToPx(plannedStartDate, startDate, pxPerDay);
-          const delayEndDate = plannedDueDate && plannedDueDate.getTime() < t.startDate.getTime()
-            ? plannedDueDate
-            : t.startDate;
-          startDelayBarW = dateToPx(delayEndDate, startDate, pxPerDay) - startDelayBarX;
-          startDelayDays = Math.round((t.startDate.getTime() - plannedStartDate.getTime()) / 86400000);
+        // Planned bar position (top line)
+        let plannedX = 0;
+        let plannedW = 0;
+        let plannedLabel = 'Planned dates not present';
+        if (hasPlannedDates && plannedStartDate && plannedDueDate) {
+          plannedX = dateToPx(plannedStartDate, startDate, pxPerDay);
+          plannedW = dateToPx(plannedDueDate, startDate, pxPerDay) - plannedX;
+          const startStr = formatPlannedDate(plannedStart!);
+          const dueStr = formatPlannedDate(plannedDue!);
+          const dayCount = daysBetween(plannedStartDate, plannedDueDate);
+          plannedLabel = `${startStr} - ${dueStr} (${dayCount}d)`;
         }
 
         // Project Length Delay: actual duration > planned duration (by > 1 day)
@@ -312,14 +236,12 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
           if ((actualDuration - plannedDuration) > ONE_DAY_MS) {
             hasProjectLengthDelay = true;
             projDelayDays = Math.round((actualDuration - plannedDuration) / ONE_DAY_MS);
-            const onTimeEnd = new Date(t.startDate.getTime() + plannedDuration);
-            projDelayX = dateToPx(onTimeEnd, startDate, pxPerDay);
+            projDelayX = dateToPx(plannedDueDate, startDate, pxPerDay); // Start dots at planned end
             projDelayW = dateToPx(t.endDate, startDate, pxPerDay) - projDelayX;
           }
         }
 
         // Completion Delay: dateCompleted > endDate (by > 1 day)
-        const ONE_DAY_CD = 86400000;
         let hasCompletionDelay = false;
         let compDelayX = 0;
         let compDelayW = 0;
@@ -328,185 +250,156 @@ function renderBody(rows: TreeRow[], startDate: Date, pxPerDay: number, totalWid
           const doneDay = new Date(t.dateCompleted.getFullYear(), t.dateCompleted.getMonth(), t.dateCompleted.getDate());
           const dueDay = new Date(t.endDate.getFullYear(), t.endDate.getMonth(), t.endDate.getDate());
           const diff = doneDay.getTime() - dueDay.getTime();
-          if (diff > ONE_DAY_CD) {
+          if (diff > ONE_DAY_MS) {
             hasCompletionDelay = true;
-            compDelayDays = Math.round(diff / ONE_DAY_CD);
-            compDelayX = dateToPx(t.endDate, startDate, pxPerDay);
+            compDelayDays = Math.round(diff / ONE_DAY_MS);
+            // Start hyphens after the project delay (or planned end if no project delay)
+            compDelayX = hasProjectLengthDelay ? projDelayX + projDelayW : (hasPlannedDates ? plannedX + plannedW : dateToPx(t.endDate, startDate, pxPerDay));
             compDelayW = dateToPx(doneDay, startDate, pxPerDay) - compDelayX;
           }
         }
 
-        const hasAnyDelay = (hasStartingDelay && startDelayBarW > 0) || (hasProjectLengthDelay && projDelayW > 0) || (hasCompletionDelay && compDelayW > 0);
-
         return (
           <g key={t.id + '-' + i}>
-            {/* ====================== DELAY BARS as LINES (NOW BOTTOM ROW) ====================== */}
-            {hasAnyDelay && (
-              <g>
-                {/* "Delay" label before delay lines */}
+            {/* ====================== LINE 1 (TOP): PLANNED TIMELINE ====================== */}
+            {hasPlannedDates && plannedW > 0 ? (
+              <>
+                {/* Planned bar: solid, slightly transparent */}
+                <rect x={plannedX} y={topLineY} width={plannedW} height={lineThickness} rx={3} fill={color} opacity={0.4} />
+                {/* "planned" label before bar */}
                 <text
-                  x={Math.min(
-                    hasStartingDelay && startDelayBarW > 0 ? startDelayBarX : Infinity,
-                    hasProjectLengthDelay && projDelayW > 0 ? projDelayX : Infinity,
-                    hasCompletionDelay && compDelayW > 0 ? compDelayX : Infinity
-                  ) - 4}
-                  y={delayLineY + 4}
+                  x={plannedX - 4}
+                  y={topLineY + 5}
                   fill="#6e7681"
                   fontSize={9}
                   fontFamily="var(--font-sans)"
                   fontStyle="italic"
                   textAnchor="end"
                 >
-                  delay
+                  planned
                 </text>
-
-                {/* Starting Delay (grey) */}
-                {hasStartingDelay && startDelayBarW > 0 && (
-                  <>
-                    <rect
-                      x={startDelayBarX}
-                      y={delayLineY}
-                      width={startDelayBarW}
-                      height={lineThickness}
-                      rx={3}
-                      fill={`url(#delay-grad-${t.id}-${i})`}
-                    />
-                    <rect
-                      x={startDelayBarX}
-                      y={delayLineY}
-                      width={startDelayBarW}
-                      height={lineThickness}
-                      rx={3}
-                      fill="none"
-                      stroke="#6e7681"
-                      strokeWidth={1}
-                      strokeDasharray="4 2"
-                      opacity={0.5}
-                    />
-                    {startDelayBarW > 20 && (
-                      <text
-                        x={startDelayBarX + startDelayBarW / 2}
-                        y={delayLineY - 4}
-                        textAnchor="middle"
-                        fill="#8b949e"
-                        fontSize={9}
-                        fontWeight={600}
-                        fontFamily="var(--font-sans)"
-                      >
-                        S +{startDelayDays}d
-                      </text>
-                    )}
-                  </>
-                )}
-
-                {/* Project Length Delay (red) */}
-                {hasProjectLengthDelay && projDelayW > 0 && (
-                  <>
-                    <rect
-                      x={projDelayX}
-                      y={delayLineY}
-                      width={projDelayW}
-                      height={lineThickness}
-                      rx={3}
-                      fill={`url(#proj-delay-grad-${t.id}-${i})`}
-                    />
-                    <rect
-                      x={projDelayX}
-                      y={delayLineY}
-                      width={projDelayW}
-                      height={lineThickness}
-                      rx={3}
-                      fill="none"
-                      stroke="#da3633"
-                      strokeWidth={1}
-                      strokeDasharray="4 2"
-                      opacity={0.7}
-                    />
-                    {projDelayW > 20 && (
-                      <text
-                        x={projDelayX + projDelayW / 2}
-                        y={delayLineY - 4}
-                        textAnchor="middle"
-                        fill="#da3633"
-                        fontSize={9}
-                        fontWeight={700}
-                        fontFamily="var(--font-sans)"
-                      >
-                        P +{projDelayDays}d
-                      </text>
-                    )}
-                  </>
-                )}
-
-                {/* Completion Delay (amber) */}
-                {hasCompletionDelay && compDelayW > 0 && (
-                  <>
-                    <rect
-                      x={compDelayX}
-                      y={delayLineY}
-                      width={compDelayW}
-                      height={lineThickness}
-                      rx={3}
-                      fill={`url(#comp-delay-grad-${t.id}-${i})`}
-                    />
-                    <rect
-                      x={compDelayX}
-                      y={delayLineY}
-                      width={compDelayW}
-                      height={lineThickness}
-                      rx={3}
-                      fill="none"
-                      stroke="#f0883e"
-                      strokeWidth={1}
-                      strokeDasharray="4 2"
-                      opacity={0.7}
-                    />
-                    {compDelayW > 20 && (
-                      <text
-                        x={compDelayX + compDelayW / 2}
-                        y={delayLineY - 4}
-                        textAnchor="middle"
-                        fill="#f0883e"
-                        fontSize={9}
-                        fontWeight={700}
-                        fontFamily="var(--font-sans)"
-                      >
-                        C +{compDelayDays}d
-                      </text>
-                    )}
-                  </>
-                )}
-              </g>
+                {/* Planned date range label after bar */}
+                <text
+                  x={plannedX + plannedW + 6}
+                  y={topLineY + 5}
+                  fill="#8b949e"
+                  fontSize={10}
+                  fontFamily="var(--font-sans)"
+                >
+                  {plannedLabel}
+                </text>
+              </>
+            ) : (
+              /* No planned dates label */
+              <text
+                x={x - 4}
+                y={topLineY + 5}
+                fill="#6e7681"
+                fontSize={9}
+                fontFamily="var(--font-sans)"
+                fontStyle="italic"
+                textAnchor="end"
+              >
+                no planned dates
+              </text>
             )}
 
-            {/* ====================== MAIN LINE (NOW TOP ROW) ====================== */}
-            {/* Planned date range label BEFORE main line */}
+            {/* ====================== LINE 2 (BOTTOM): ACTUAL + DELAYS ====================== */}
+            {/* "actual" label before bar */}
             <text
-              x={x - 4}
-              y={mainLineY + 5}
-              fill={hasPlannedDates ? '#8b949e' : '#6e7681'}
-              fontSize={10}
-              fontStyle={hasPlannedDates ? 'normal' : 'italic'}
+              x={(hasPlannedDates ? plannedX : x) - 4}
+              y={bottomLineY + 5}
+              fill="#6e7681"
+              fontSize={9}
               fontFamily="var(--font-sans)"
+              fontStyle="italic"
               textAnchor="end"
             >
-              {plannedLabel}
+              actual
             </text>
 
-            {/* Main completion line */}
-            <rect x={x} y={mainLineY} width={w} height={lineThickness} rx={3} fill={color} opacity={0.9} />
+            {/* Part 1: Solid bar — planned start to planned due (or actual if no planned dates) */}
+            <rect
+              x={hasPlannedDates ? plannedX : x}
+              y={bottomLineY}
+              width={hasPlannedDates ? plannedW : w}
+              height={lineThickness}
+              rx={3}
+              fill={color}
+              opacity={0.9}
+            />
 
-            {/* Status label ABOVE line */}
-            {w > 60 && (
-              <text x={x} y={mainLineY - 4} fill={color} fontSize={10} fontWeight={600} fontFamily="var(--font-sans)">
+            {/* Status label ABOVE bar */}
+            {(hasPlannedDates ? plannedW : w) > 60 && (
+              <text x={hasPlannedDates ? plannedX : x} y={bottomLineY - 4} fill={color} fontSize={10} fontWeight={600} fontFamily="var(--font-sans)">
                 {label}
               </text>
             )}
 
-            {/* Actual start date - due date label after main line */}
+            {/* Part 2: Dotted extension — project length delay */}
+            {hasProjectLengthDelay && projDelayW > 0 && (
+              <>
+                <line
+                  x1={projDelayX}
+                  y1={bottomLineY + lineThickness / 2}
+                  x2={projDelayX + projDelayW}
+                  y2={bottomLineY + lineThickness / 2}
+                  stroke="#da3633"
+                  strokeWidth={lineThickness - 2}
+                  strokeDasharray="0 6"
+                  strokeLinecap="round"
+                  opacity={0.8}
+                />
+                {projDelayW > 20 && (
+                  <text
+                    x={projDelayX + projDelayW / 2}
+                    y={bottomLineY - 4}
+                    textAnchor="middle"
+                    fill="#da3633"
+                    fontSize={9}
+                    fontWeight={600}
+                    fontFamily="var(--font-sans)"
+                  >
+                    P +{projDelayDays}d
+                  </text>
+                )}
+              </>
+            )}
+
+            {/* Part 3: Dashed (hyphens) extension — completion delay */}
+            {hasCompletionDelay && compDelayW > 0 && (
+              <>
+                <line
+                  x1={compDelayX}
+                  y1={bottomLineY + lineThickness / 2}
+                  x2={compDelayX + compDelayW}
+                  y2={bottomLineY + lineThickness / 2}
+                  stroke="#f0883e"
+                  strokeWidth={lineThickness}
+                  strokeDasharray="10 4"
+                  strokeLinecap="butt"
+                  opacity={0.7}
+                />
+                {compDelayW > 20 && (
+                  <text
+                    x={compDelayX + compDelayW / 2}
+                    y={bottomLineY - 4}
+                    textAnchor="middle"
+                    fill="#f0883e"
+                    fontSize={9}
+                    fontWeight={600}
+                    fontFamily="var(--font-sans)"
+                  >
+                    C +{compDelayDays}d
+                  </text>
+                )}
+              </>
+            )}
+
+            {/* Actual date range label after all bars */}
             <text
-              x={x + w + 6}
-              y={mainLineY + 5}
+              x={(hasPlannedDates ? plannedX + plannedW : x + w) + (hasProjectLengthDelay ? projDelayW : 0) + (hasCompletionDelay ? compDelayW : 0) + 6}
+              y={bottomLineY + 5}
               fill="#8b949e"
               fontSize={10}
               fontFamily="var(--font-sans)"
