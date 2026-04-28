@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
-import BandwidthPanel from './BandwidthPanel';
+import { computeBandwidthSummary } from '../utils/bandwidthUtils';
 
 const VIEW_TABS = [
   { key: 'gantt' as const, icon: '', label: 'Gantt' },
@@ -334,11 +334,17 @@ const SCALE_OPTIONS: { value: GanttScaleOption; label: string }[] = [
 
 
 export default function Header() {
-  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, ganttScale, fetchMembers, fetchTasks, setSelectedUser, setActiveView, applyIndividualFilter, clearIndividualFilter, setGanttScale } = useTaskStore();
+  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, ganttScale, allIndividualTasks, allIndividualNoDateTasks, fetchMembers, fetchTasks, setSelectedUser, setActiveView, applyIndividualFilter, clearIndividualFilter, setGanttScale } = useTaskStore();
+  const [hoveredFreeDays, setHoveredFreeDays] = useState(false);
+
+  const bandwidth = useMemo(
+    () => computeBandwidthSummary(allIndividualTasks, allIndividualNoDateTasks),
+    [allIndividualTasks, allIndividualNoDateTasks]
+  );
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
-  const [showBandwidth, setShowBandwidth] = useState(false);
+
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -507,14 +513,42 @@ export default function Header() {
 
           <div className="header-spacer" />
 
-          {/* Bandwidth Button */}
+          {/* Bandwidth Info — per assignee, single horizontal line */}
           {hasTasks && (
-            <button
-              className="bandwidth-btn"
-              onClick={() => setShowBandwidth(true)}
-            >
-              Bandwidth
-            </button>
+            <div className="bw-header-inline">
+              <span className="bw-header-inline-label">Bandwidth</span>
+              <span className={`bw-header-inline-value ${!bandwidth.hasWorkInNext14Days ? 'bw-val-yes' : 'bw-val-no'}`}>
+                {!bandwidth.hasWorkInNext14Days ? 'Yes' : 'No'}
+              </span>
+              <div className="bw-header-inline-sep" />
+              <span className="bw-header-inline-label">Free Days</span>
+              <div
+                className="bw-header-inline-hoverable"
+                onMouseEnter={() => setHoveredFreeDays(true)}
+                onMouseLeave={() => setHoveredFreeDays(false)}
+              >
+                <span className={`bw-header-inline-value ${bandwidth.freeDaysCount > 0 ? 'bw-val-free' : 'bw-val-muted'}`}>
+                  {bandwidth.freeDaysCount > 0 ? bandwidth.freeDaysCount : 'No Free Days'}
+                </span>
+                {hoveredFreeDays && bandwidth.freeGaps.length > 0 && (
+                  <div className="bw-tooltip">
+                    <div className="bw-tooltip-title">Free Date Ranges (Next 14 Days)</div>
+                    {bandwidth.freeGaps.map((gap, idx) => (
+                      <div key={idx} className="bw-tooltip-row">
+                        <span className="bw-tooltip-dot" />
+                        <span className="bw-tooltip-dates">{gap.label}</span>
+                        <span className="bw-tooltip-days">{gap.days}d</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <div className="bw-header-inline-sep" />
+              <span className="bw-header-inline-label">Free From</span>
+              <span className={`bw-header-inline-value ${bandwidth.isFreeNow ? 'bw-val-yes' : ''}`}>
+                {bandwidth.freeFromLabel}
+              </span>
+            </div>
           )}
         </div>
       )}
@@ -540,8 +574,7 @@ export default function Header() {
         ))}
       </div>
 
-      {/* Bandwidth Panel */}
-      {showBandwidth && <BandwidthPanel onClose={() => setShowBandwidth(false)} />}
+
     </>
   );
 }
