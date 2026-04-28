@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef, useMemo } from 'react';
-import { NormalizedTask } from '../types';
+import { useState, useEffect, useRef } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
+import BandwidthPanel from './BandwidthPanel';
 
 const VIEW_TABS = [
   { key: 'gantt' as const, icon: '', label: 'Gantt' },
@@ -322,66 +322,6 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
   );
 }
 
-/** Compute bandwidth info: "Working till" and "Free from" dates */
-function computeBandwidth(tasks: NormalizedTask[], noDateTasks: NormalizedTask[]) {
-  const allTasks = [...tasks, ...noDateTasks];
-
-  // Find tasks that are NOT completed/closed — these are active workload
-  const activeTasks = allTasks.filter(t => {
-    const s = t.status.toLowerCase();
-    return !(s.includes('complete') || s.includes('done') || s.includes('resolved') || s.includes('closed') || s.includes('archived'));
-  });
-
-  // Find the task with the latest end date among active tasks
-  let latestEndDate: Date | null = null;
-  let lastActiveTask: NormalizedTask | null = null;
-  for (const t of activeTasks) {
-    if (t.endDate && (!latestEndDate || t.endDate > latestEndDate)) {
-      latestEndDate = t.endDate;
-      lastActiveTask = t;
-    }
-  }
-
-  // For completed tasks, find the one with the latest completion date
-  const completedTasks = allTasks.filter(t => {
-    const s = t.status.toLowerCase();
-    return s.includes('complete') || s.includes('done') || s.includes('resolved');
-  });
-
-  let latestCompletedDate: Date | null = null;
-  let lastCompletedTask: NormalizedTask | null = null;
-  for (const t of completedTasks) {
-    const d = t.dateCompleted || t.endDate;
-    if (d && (!latestCompletedDate || d > latestCompletedDate)) {
-      latestCompletedDate = d;
-      lastCompletedTask = t;
-    }
-  }
-
-  // "Working till" = latest end date of active tasks; fallback to completed
-  const workingTill = latestEndDate || latestCompletedDate;
-  const lastTask = lastActiveTask || lastCompletedTask;
-
-  // "Free from" = day after workingTill, or "Now" if all tasks are done
-  let freeFrom: Date | null = null;
-  let isFreeNow = false;
-
-  if (!latestEndDate) {
-    isFreeNow = true;
-  } else {
-    const nextDay = new Date(latestEndDate);
-    nextDay.setDate(nextDay.getDate() + 1);
-    freeFrom = nextDay;
-  }
-
-  return { workingTill, freeFrom, isFreeNow, activeTaskCount: activeTasks.length, lastTask };
-}
-
-function formatBandwidthDate(date: Date): string {
-  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  return `${months[date.getMonth()]} ${date.getDate()}, ${date.getFullYear()}`;
-}
-
 type GanttScaleOption = 'day' | 'week' | 'month' | 'quarter';
 
 const SCALE_OPTIONS: { value: GanttScaleOption; label: string }[] = [
@@ -394,10 +334,11 @@ const SCALE_OPTIONS: { value: GanttScaleOption; label: string }[] = [
 
 
 export default function Header() {
-  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, ganttScale, fetchMembers, fetchTasks, setSelectedUser, setActiveView, openTaskDetail, applyIndividualFilter, clearIndividualFilter, setGanttScale } = useTaskStore();
+  const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, ganttScale, fetchMembers, fetchTasks, setSelectedUser, setActiveView, applyIndividualFilter, clearIndividualFilter, setGanttScale } = useTaskStore();
   const [query, setQuery] = useState('');
   const [showDropdown, setShowDropdown] = useState(false);
   const [showFilter, setShowFilter] = useState(false);
+  const [showBandwidth, setShowBandwidth] = useState(false);
 
   const wrapperRef = useRef<HTMLDivElement>(null);
   const filterRef = useRef<HTMLDivElement>(null);
@@ -437,8 +378,6 @@ export default function Header() {
   const handleGenerate = () => {
     if (selectedUserId) fetchTasks();
   };
-
-  const bandwidth = useMemo(() => computeBandwidth(tasks, noDateTasks), [tasks, noDateTasks]);
 
   const isTeamMode = mode === 'team';
   const hasIndividualFilter = individualFilter.dateFrom || individualFilter.dateTo || individualFilter.statusFilter.size > 0 || individualFilter.delayFilter.size > 0;
@@ -568,37 +507,14 @@ export default function Header() {
 
           <div className="header-spacer" />
 
-          {/* Bandwidth Section */}
+          {/* Bandwidth Button */}
           {hasTasks && (
-            <div className="bandwidth-section">
-              <span className="bandwidth-title">Bandwidth</span>
-              <div className="bandwidth-items">
-                <div
-                  className={`bandwidth-item ${bandwidth.lastTask ? 'bandwidth-item-clickable' : ''}`}
-                  onClick={() => bandwidth.lastTask && openTaskDetail(bandwidth.lastTask)}
-                  title={bandwidth.lastTask ? `Click to view: ${bandwidth.lastTask.name}` : undefined}
-                >
-                  <span className="bandwidth-dot bandwidth-dot-working" />
-                  <span className="bandwidth-key">{bandwidth.lastTask ? bandwidth.lastTask.name : 'last working project'}</span>
-                  <span className="bandwidth-value bandwidth-value-working">
-                    {bandwidth.lastTask
-                      ? `${formatBandwidthDate(bandwidth.lastTask.startDate!)} - ${formatBandwidthDate(bandwidth.lastTask.endDate!)}`
-                      : '—'}
-                  </span>
-                </div>
-                <div className="bandwidth-item">
-                  <span className="bandwidth-dot bandwidth-dot-free" />
-                  <span className="bandwidth-key">Free</span>
-                  <span className="bandwidth-value bandwidth-value-free">
-                    {bandwidth.isFreeNow
-                      ? 'Now'
-                      : bandwidth.freeFrom
-                        ? formatBandwidthDate(bandwidth.freeFrom)
-                        : '—'}
-                  </span>
-                </div>
-              </div>
-            </div>
+            <button
+              className="bandwidth-btn"
+              onClick={() => setShowBandwidth(true)}
+            >
+              Bandwidth
+            </button>
           )}
         </div>
       )}
@@ -623,6 +539,9 @@ export default function Header() {
           </button>
         ))}
       </div>
+
+      {/* Bandwidth Panel */}
+      {showBandwidth && <BandwidthPanel onClose={() => setShowBandwidth(false)} />}
     </>
   );
 }

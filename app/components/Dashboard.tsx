@@ -14,7 +14,7 @@ const ROW_HEIGHT = 56;
 const SCALE_ORDER: GanttScale[] = ['quarter', 'month', 'week', 'day'];
 
 export default function Dashboard() {
-  const { tasks, treeRows, timelineConfig, loading, loadingProgress, collapsedGroups, selectedUserName, ganttScale, setGanttScale } = useTaskStore();
+  const { tasks, treeRows, timelineConfig, loading, loadingProgress, collapsedGroups, selectedUserName, ganttScale, setGanttScale, openTaskDetail } = useTaskStore();
 
   const treeRef = useRef<HTMLDivElement>(null);
   const ganttBodyRef = useRef<HTMLDivElement>(null);
@@ -119,6 +119,7 @@ export default function Dashboard() {
           rows={visibleRows}
           config={timelineConfig}
           rowHeight={ROW_HEIGHT}
+          onTaskClick={openTaskDetail}
         />
       </div>
 

@@ -1,6 +1,7 @@
 'use client';
 
 import { useState } from 'react';
+import { NormalizedTask } from '../types';
 
 import { TreeRow, TimelineConfig, CustomField, GanttScale } from '../types';
 import { dateToPx, durationToPx, formatShortDate, getDayOfWeekLetter, isSameDay, isWeekend, generateTimeBuckets, TimeBucket, HeaderGroup } from '../utils/dateUtils';
@@ -10,6 +11,7 @@ interface Props {
   rows: TreeRow[];
   config: TimelineConfig;
   rowHeight: number;
+  onTaskClick?: (task: NormalizedTask) => void;
 }
 
 const PLANNED_START_NAMES = ['planned start date', 'planned start'];
@@ -59,7 +61,7 @@ function getStatusLabel(status: string): string {
   return status;
 }
 
-export default function GanttChart({ mode, rows, config, rowHeight }: Props) {
+export default function GanttChart({ mode, rows, config, rowHeight, onTaskClick }: Props) {
   const { startDate, pxPerDay, totalDays, totalWidth, scale } = config;
   const today = new Date();
   const headerHeight = 50;
@@ -74,7 +76,7 @@ export default function GanttChart({ mode, rows, config, rowHeight }: Props) {
     return renderHeader(buckets, groups, startDate, pxPerDay, totalWidth, today, headerHeight, scale);
   }
 
-  return renderBody(rows, buckets, startDate, pxPerDay, totalWidth, today, rowHeight, scale, highlightedRow, setHighlightedRow);
+  return renderBody(rows, buckets, startDate, pxPerDay, totalWidth, today, rowHeight, scale, highlightedRow, setHighlightedRow, onTaskClick);
 }
 
 function renderHeader(
@@ -177,7 +179,8 @@ function renderBody(
   rowHeight: number,
   scale: GanttScale,
   highlightedRow: number | null,
-  setHighlightedRow: (idx: number | null) => void
+  setHighlightedRow: (idx: number | null) => void,
+  onTaskClick?: (task: NormalizedTask) => void
 ) {
   const totalHeight = rows.length * rowHeight;
   const todayX = dateToPx(today, startDate, pxPerDay);
@@ -212,7 +215,7 @@ function renderBody(
       )}
 
       {/* Clickable row hit areas + horizontal row lines */}
-      {rows.map((_, i) => (
+      {rows.map((row, i) => (
         <g key={`h${i}`}>
           <rect
             x={0}
@@ -220,9 +223,12 @@ function renderBody(
             width={totalWidth}
             height={rowHeight}
             fill="transparent"
-            style={{ cursor: 'pointer' }}
+            style={{ cursor: row.type === 'task' ? 'pointer' : 'default' }}
             onMouseEnter={() => setHighlightedRow(i)}
             onMouseLeave={() => setHighlightedRow(null)}
+            onClick={() => {
+              if (row.type === 'task' && onTaskClick) onTaskClick(row.task);
+            }}
           />
           <line x1={0} y1={(i + 1) * rowHeight} x2={totalWidth} y2={(i + 1) * rowHeight} stroke="rgba(255,255,255,0.04)" strokeWidth={0.5} />
         </g>
