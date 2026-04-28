@@ -7,7 +7,10 @@ export function convertClickUpDate(timestamp: string | number | null | undefined
   return new Date(ms);
 }
 
-export function getTimelineRange(tasks: { startDate: Date | null; endDate: Date | null }[]): { start: Date; end: Date } {
+export function getTimelineRange(
+  tasks: { startDate: Date | null; endDate: Date | null }[],
+  scale: GanttScale = 'day'
+): { start: Date; end: Date } {
   const now = new Date();
   let minDate = new Date(now);
   let maxDate = new Date(now);
@@ -26,10 +29,21 @@ export function getTimelineRange(tasks: { startDate: Date | null; endDate: Date 
     }
   }
 
+  // Generous padding based on scale so dates render well beyond task boundaries
+  // This lets users scroll freely and compare tasks across a wide timeframe
+  const paddingDays = (() => {
+    switch (scale) {
+      case 'day':     return 60;    // ~2 months each side
+      case 'week':    return 140;   // 20 weeks each side
+      case 'month':   return 300;   // ~10 months each side
+      case 'quarter': return 1460;  // ~4 years each side
+    }
+  })();
+
   const start = new Date(minDate);
-  start.setDate(start.getDate() - 7);
+  start.setDate(start.getDate() - paddingDays);
   const end = new Date(maxDate);
-  end.setDate(end.getDate() + 7);
+  end.setDate(end.getDate() + paddingDays);
 
   return { start, end };
 }
@@ -84,7 +98,7 @@ export function getTimelineConfig(
   scale: GanttScale = 'day'
 ): TimelineConfig {
   const pxPerDay = getScalePxPerDay(scale);
-  const { start, end } = getTimelineRange(tasks);
+  const { start, end } = getTimelineRange(tasks, scale);
   const totalDays = Math.ceil((end.getTime() - start.getTime()) / (1000 * 60 * 60 * 24));
   return { startDate: start, endDate: end, pxPerDay, totalDays, totalWidth: totalDays * pxPerDay, scale };
 }
