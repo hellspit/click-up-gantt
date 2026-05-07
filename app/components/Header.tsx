@@ -521,7 +521,13 @@ export default function Header() {
               onClick={() => setShowBandwidthPanel(true)}
               title="View bandwidth details"
             >
-              <span className="bw-header-btn-icon">📊</span>
+              <span className="bw-header-btn-icon">
+                <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
+                  <rect x="1" y="8" width="3" height="5" rx="0.5" fill="currentColor" opacity="0.5"/>
+                  <rect x="5.5" y="4" width="3" height="9" rx="0.5" fill="currentColor" opacity="0.7"/>
+                  <rect x="10" y="1" width="3" height="12" rx="0.5" fill="currentColor"/>
+                </svg>
+              </span>
               <span className="bw-header-btn-text">Bandwidth</span>
               <span className={`bw-header-btn-dot ${!bandwidth.hasWorkInNext14Days ? 'bw-dot-yes' : 'bw-dot-no'}`} />
             </div>

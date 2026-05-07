@@ -36,7 +36,9 @@ export default function BandwidthPanel({ onClose }: Props) {
         <div className="detail-header">
           <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
             <span style={{
-              fontSize: '16px',
+              fontSize: '11px',
+              fontWeight: 700,
+              letterSpacing: '0.5px',
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
@@ -45,7 +47,9 @@ export default function BandwidthPanel({ onClose }: Props) {
               borderRadius: '8px',
               background: 'linear-gradient(135deg, rgba(88, 166, 255, 0.15), rgba(188, 140, 255, 0.15))',
               border: '1px solid rgba(88, 166, 255, 0.2)',
-            }}>📊</span>
+              color: 'var(--text-secondary)',
+              fontFamily: 'var(--font-mono)',
+            }}>BW</span>
             <div>
               <div style={{
                 fontSize: '14px',
