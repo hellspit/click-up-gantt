@@ -2311,3 +2311,228 @@ html, body { height: 100%; background: var(--bg-primary); color: var(--text-prim
   0%, 100% { opacity: 1; }
   50% { opacity: 0.5; }
 }
+
+/* ===== BANDWIDTH HEADER BUTTON ===== */
+.bw-header-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 7px 16px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid var(--border-secondary);
+  border-radius: 8px;
+  cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  white-space: nowrap;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.bw-header-btn:hover {
+  background: rgba(88, 166, 255, 0.08);
+  border-color: rgba(88, 166, 255, 0.3);
+  box-shadow: 0 2px 12px rgba(88, 166, 255, 0.1);
+  transform: translateY(-1px);
+}
+
+.bw-header-btn:active {
+  transform: translateY(0);
+}
+
+.bw-header-btn-icon {
+  font-size: 14px;
+  line-height: 1;
+}
+
+.bw-header-btn-text {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  letter-spacing: 0.3px;
+}
+
+.bw-header-btn:hover .bw-header-btn-text {
+  color: var(--text-primary);
+}
+
+.bw-header-btn-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+  transition: box-shadow 0.3s;
+}
+
+.bw-dot-yes {
+  background: #3fb950;
+  box-shadow: 0 0 6px rgba(63, 185, 80, 0.5);
+}
+
+.bw-dot-no {
+  background: #f0883e;
+  box-shadow: 0 0 6px rgba(240, 136, 62, 0.5);
+}
+
+/* ===== BANDWIDTH PANEL ===== */
+.bw-panel {
+  /* Inherits from .detail-panel */
+  overflow-y: auto;
+}
+
+.bw-panel-section {
+  padding: 20px;
+  border-bottom: 1px solid var(--border-primary);
+}
+
+.bw-panel-section:last-child {
+  border-bottom: none;
+}
+
+.bw-panel-section-title {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 1px;
+  color: var(--text-tertiary);
+  margin-bottom: 14px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.bw-panel-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  padding: 14px 16px;
+}
+
+.bw-panel-stat-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.bw-panel-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 13px;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+.bw-panel-stat-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.bw-panel-stat-value {
+  font-size: 13px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+}
+
+.bw-panel-val-yes {
+  color: #3fb950;
+}
+
+.bw-panel-val-no {
+  color: #f0883e;
+}
+
+.bw-panel-val-free {
+  color: #bc8cff;
+}
+
+.bw-panel-val-muted {
+  color: #f87171;
+}
+
+.bw-panel-divider {
+  width: 100%;
+  height: 1px;
+  background: var(--border-subtle);
+  margin: 12px 0;
+}
+
+/* Free gap rows */
+.bw-panel-gap-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 2px 0;
+}
+
+.bw-panel-gap-dates {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12px;
+  color: var(--text-secondary);
+  font-family: var(--font-mono);
+}
+
+.bw-panel-gap-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #bc8cff;
+  flex-shrink: 0;
+}
+
+.bw-panel-gap-days {
+  font-size: 11px;
+  font-weight: 700;
+  color: #3fb950;
+  background: rgba(63, 185, 80, 0.1);
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-family: var(--font-mono);
+  flex-shrink: 0;
+}
+
+/* Stats grid */
+.bw-panel-stats-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.bw-panel-mini-card {
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-primary);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  transition: border-color 0.2s, background 0.2s;
+}
+
+.bw-panel-mini-card:hover {
+  border-color: var(--border-secondary);
+  background: rgba(255, 255, 255, 0.03);
+}
+
+.bw-panel-mini-value {
+  font-size: 24px;
+  font-weight: 700;
+  font-family: var(--font-mono);
+  color: var(--text-primary);
+  line-height: 1;
+}
+
+.bw-panel-mini-label {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+}

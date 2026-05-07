@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
 import { computeBandwidthSummary } from '../utils/bandwidthUtils';
+import BandwidthPanel from './BandwidthPanel';
 
 const VIEW_TABS = [
   { key: 'gantt' as const, icon: '', label: 'Gantt' },
@@ -335,7 +336,7 @@ const SCALE_OPTIONS: { value: GanttScaleOption; label: string }[] = [
 
 export default function Header() {
   const { members, membersLoading, selectedUserId, selectedUserName, loading, tasks, noDateTasks, activeView, mode, individualFilter, availableStatuses, ganttScale, allIndividualTasks, allIndividualNoDateTasks, fetchMembers, fetchTasks, setSelectedUser, setActiveView, applyIndividualFilter, clearIndividualFilter, setGanttScale } = useTaskStore();
-  const [hoveredFreeDays, setHoveredFreeDays] = useState(false);
+  const [showBandwidthPanel, setShowBandwidthPanel] = useState(false);
 
   const bandwidth = useMemo(
     () => computeBandwidthSummary(allIndividualTasks, allIndividualNoDateTasks),
@@ -513,41 +514,16 @@ export default function Header() {
 
           <div className="header-spacer" />
 
-          {/* Bandwidth Info — per assignee, single horizontal line */}
+          {/* Bandwidth Button */}
           {hasTasks && (
-            <div className="bw-header-inline">
-              <span className="bw-header-inline-label">Bandwidth</span>
-              <span className={`bw-header-inline-value ${!bandwidth.hasWorkInNext14Days ? 'bw-val-yes' : 'bw-val-no'}`}>
-                {!bandwidth.hasWorkInNext14Days ? 'Yes' : 'No'}
-              </span>
-              <div className="bw-header-inline-sep" />
-              <span className="bw-header-inline-label">Free Days</span>
-              <div
-                className="bw-header-inline-hoverable"
-                onMouseEnter={() => setHoveredFreeDays(true)}
-                onMouseLeave={() => setHoveredFreeDays(false)}
-              >
-                <span className={`bw-header-inline-value ${bandwidth.freeDaysCount > 0 ? 'bw-val-free' : 'bw-val-muted'}`}>
-                  {bandwidth.freeDaysCount > 0 ? bandwidth.freeDaysCount : 'No Free Days'}
-                </span>
-                {hoveredFreeDays && bandwidth.freeGaps.length > 0 && (
-                  <div className="bw-tooltip">
-                    <div className="bw-tooltip-title">Free Date Ranges (Next 14 Days)</div>
-                    {bandwidth.freeGaps.map((gap, idx) => (
-                      <div key={idx} className="bw-tooltip-row">
-                        <span className="bw-tooltip-dot" />
-                        <span className="bw-tooltip-dates">{gap.label}</span>
-                        <span className="bw-tooltip-days">{gap.days}d</span>
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-              <div className="bw-header-inline-sep" />
-              <span className="bw-header-inline-label">Free From</span>
-              <span className={`bw-header-inline-value ${bandwidth.isFreeNow ? 'bw-val-yes' : ''}`}>
-                {bandwidth.freeFromLabel}
-              </span>
+            <div
+              className="bw-header-btn"
+              onClick={() => setShowBandwidthPanel(true)}
+              title="View bandwidth details"
+            >
+              <span className="bw-header-btn-icon">📊</span>
+              <span className="bw-header-btn-text">Bandwidth</span>
+              <span className={`bw-header-btn-dot ${!bandwidth.hasWorkInNext14Days ? 'bw-dot-yes' : 'bw-dot-no'}`} />
             </div>
           )}
         </div>
@@ -574,7 +550,10 @@ export default function Header() {
         ))}
       </div>
 
-
+      {/* Bandwidth Panel */}
+      {showBandwidthPanel && (
+        <BandwidthPanel onClose={() => setShowBandwidthPanel(false)} />
+      )}
     </>
   );
 }
