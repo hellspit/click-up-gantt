@@ -400,16 +400,37 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       const processed = processTaskData(data.tasks || [], get().ganttScale);
       const allStatuses = extractUniqueStatuses([...processed.tasks, ...processed.noDateTasks]);
 
-      set({
-        ...processed,
-        allIndividualTasks: processed.tasks,
-        allIndividualNoDateTasks: processed.noDateTasks,
-        availableStatuses: allStatuses,
-        individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set() },
-        loading: false,
-        loadingProgress: '',
-        collapsedGroups: new Set(),
-      });
+      // Preserve the current individual filter so it persists across person switches
+      const currentFilter = get().individualFilter;
+      const hasActiveFilter = currentFilter.dateFrom || currentFilter.dateTo || currentFilter.statusFilter.size > 0 || currentFilter.delayFilter.size > 0;
+
+      if (hasActiveFilter) {
+        // Re-apply the existing filter to the new person's tasks
+        const filteredDated = filterTasksIndividual(processed.tasks, currentFilter);
+        const filteredUndated = filterTasksIndividual(processed.noDateTasks, currentFilter);
+        const filteredProcessed = processNormalizedTasks(filteredDated, filteredUndated, get().ganttScale);
+
+        set({
+          ...filteredProcessed,
+          allIndividualTasks: processed.tasks,
+          allIndividualNoDateTasks: processed.noDateTasks,
+          availableStatuses: allStatuses,
+          // individualFilter is intentionally NOT reset — it persists
+          loading: false,
+          loadingProgress: '',
+          collapsedGroups: new Set(),
+        });
+      } else {
+        set({
+          ...processed,
+          allIndividualTasks: processed.tasks,
+          allIndividualNoDateTasks: processed.noDateTasks,
+          availableStatuses: allStatuses,
+          loading: false,
+          loadingProgress: '',
+          collapsedGroups: new Set(),
+        });
+      }
     } catch (err: any) {
       set({ error: err.message, loading: false, loadingProgress: '' });
     }
