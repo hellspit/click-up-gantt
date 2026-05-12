@@ -28,12 +28,15 @@ interface ResolvedMember {
 }
 
 type DelayType = 'starting' | 'project_length' | 'completion';
+type ActualDelayedValue = 'yes' | 'no' | 'null';
+type CustomFieldOption = { id?: string | number; orderindex?: string | number; name?: string };
 
 interface IndividualFilter {
   dateFrom: string | null; // ISO date string YYYY-MM-DD
   dateTo: string | null;
   statusFilter: Set<string>; // empty = show all
   delayFilter: Set<DelayType>; // empty = show all (no delay filtering)
+  actualDelayedFilter: Set<ActualDelayedValue>; // empty = show all delayed field values
 }
 
 interface TaskStore {
@@ -161,6 +164,43 @@ function getTaskDelays(t: NormalizedTask): Set<DelayType> {
   return delays;
 }
 
+function getActualDelayedValue(t: NormalizedTask): ActualDelayedValue {
+  const customField = t.customFields.find(cf => cf.name.toLowerCase() === 'delayed');
+  if (!customField || customField.value === null || customField.value === undefined || customField.value === '') {
+    return 'null';
+  }
+
+  if (customField.type === 'drop_down' && customField.typeConfig?.options) {
+    const options = customField.typeConfig.options as CustomFieldOption[];
+    const optionByIndex = options.find((opt) => String(opt.orderindex) === String(customField.value));
+    const optionById = options.find((opt) => String(opt.id) === String(customField.value));
+    const optionName = (optionByIndex?.name || optionById?.name || '').toLowerCase();
+    if (optionName === 'yes') return 'yes';
+    if (optionName === 'no') return 'no';
+    return 'null';
+  }
+
+  if (typeof customField.value === 'string') {
+    const v = customField.value.toLowerCase();
+    if (v === 'yes') return 'yes';
+    if (v === 'no') return 'no';
+  }
+
+  if (Array.isArray(customField.value)) {
+    const values = customField.value.map(v => String(v).toLowerCase());
+    if (values.includes('yes')) return 'yes';
+    if (values.includes('no')) return 'no';
+    return values.length > 0 ? 'null' : 'null';
+  }
+
+  if (customField.type === 'checkbox') {
+    if (customField.value === true) return 'yes';
+    if (customField.value === false) return 'no';
+  }
+
+  return 'null';
+}
+
 function filterTasksIndividual(
   allTasks: NormalizedTask[],
   filter: IndividualFilter
@@ -205,6 +245,11 @@ function filterTasksIndividual(
       }
       return false;
     });
+  }
+
+  // Actual Delayed custom field filter
+  if (filter.actualDelayedFilter.size > 0) {
+    result = result.filter(t => filter.actualDelayedFilter.has(getActualDelayedValue(t)));
   }
 
   return result;
@@ -338,7 +383,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   // Individual unfiltered backup
   allIndividualTasks: [],
   allIndividualNoDateTasks: [],
-  individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set() },
+  individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set(), actualDelayedFilter: new Set() },
   availableStatuses: [],
 
   // Team unfiltered backup
@@ -402,7 +447,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
       // Preserve the current individual filter so it persists across person switches
       const currentFilter = get().individualFilter;
-      const hasActiveFilter = currentFilter.dateFrom || currentFilter.dateTo || currentFilter.statusFilter.size > 0 || currentFilter.delayFilter.size > 0;
+      const hasActiveFilter = currentFilter.dateFrom || currentFilter.dateTo || currentFilter.statusFilter.size > 0 || currentFilter.delayFilter.size > 0 || currentFilter.actualDelayedFilter.size > 0;
 
       if (hasActiveFilter) {
         // Re-apply the existing filter to the new person's tasks
@@ -637,6 +682,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       dateTo: partial.dateTo !== undefined ? partial.dateTo : individualFilter.dateTo,
       statusFilter: partial.statusFilter !== undefined ? partial.statusFilter : individualFilter.statusFilter,
       delayFilter: partial.delayFilter !== undefined ? partial.delayFilter : individualFilter.delayFilter,
+      actualDelayedFilter: partial.actualDelayedFilter !== undefined ? partial.actualDelayedFilter : individualFilter.actualDelayedFilter,
     };
 
     const filteredDated = filterTasksIndividual(allIndividualTasks, newFilter);
@@ -654,7 +700,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const { allIndividualTasks, allIndividualNoDateTasks } = get();
     const processed = processNormalizedTasks(allIndividualTasks, allIndividualNoDateTasks, get().ganttScale);
     set({
-      individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set() },
+      individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set(), actualDelayedFilter: new Set() },
       ...processed,
       collapsedGroups: new Set(),
     });

@@ -24,6 +24,9 @@ const STATUS_COLORS: Record<string, string> = {
   'open/to do': '#58a6ff',
 };
 
+type ActualDelayedValue = 'yes' | 'no' | 'null';
+type DelayType = 'starting' | 'project_length' | 'completion';
+
 function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
   const individualFilter = useTaskStore(s => s.individualFilter);
   const availableStatuses = useTaskStore(s => s.availableStatuses);
@@ -33,9 +36,10 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
   const [dateFrom, setDateFrom] = useState(individualFilter.dateFrom || '');
   const [dateTo, setDateTo] = useState(individualFilter.dateTo || '');
   const [statusFilter, setStatusFilter] = useState<Set<string>>(new Set(individualFilter.statusFilter));
-  const [delayFilter, setDelayFilter] = useState<Set<string>>(new Set(individualFilter.delayFilter));
+  const [delayFilter, setDelayFilter] = useState<Set<DelayType>>(new Set(individualFilter.delayFilter));
+  const [actualDelayedFilter, setActualDelayedFilter] = useState<Set<ActualDelayedValue>>(new Set(individualFilter.actualDelayedFilter));
 
-  const isAnyFilter = dateFrom || dateTo || statusFilter.size > 0 || delayFilter.size > 0;
+  const isAnyFilter = dateFrom || dateTo || statusFilter.size > 0 || delayFilter.size > 0 || actualDelayedFilter.size > 0;
 
   const toggleStatus = (s: string) => {
     const next = new Set(statusFilter);
@@ -44,11 +48,18 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
     setStatusFilter(next);
   };
 
-  const toggleDelay = (d: string) => {
+  const toggleDelay = (d: DelayType) => {
     const next = new Set(delayFilter);
     if (next.has(d)) next.delete(d);
     else next.add(d);
     setDelayFilter(next);
+  };
+
+  const toggleActualDelayed = (value: ActualDelayedValue) => {
+    const next = new Set(actualDelayedFilter);
+    if (next.has(value)) next.delete(value);
+    else next.add(value);
+    setActualDelayedFilter(next);
   };
 
   const handleApply = () => {
@@ -56,7 +67,8 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
       dateFrom: dateFrom || null,
       dateTo: dateTo || null,
       statusFilter,
-      delayFilter: delayFilter as any,
+      delayFilter,
+      actualDelayedFilter,
     });
     onClose();
   };
@@ -66,6 +78,7 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
     setDateTo('');
     setStatusFilter(new Set());
     setDelayFilter(new Set());
+    setActualDelayedFilter(new Set());
     clearIndividualFilter();
     onClose();
   };
@@ -242,9 +255,9 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
         </div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
           {[
-            { key: 'starting', label: 'Starting Delay', color: '#6e7681', icon: '' },
-            { key: 'project_length', label: 'Project Length Delay', color: '#da3633', icon: '' },
-            { key: 'completion', label: 'Completion Delay', color: '#f0883e', icon: '' },
+            { key: 'starting' as const, label: 'Starting Delay', color: '#6e7681', icon: '' },
+            { key: 'project_length' as const, label: 'Project Length Delay', color: '#da3633', icon: '' },
+            { key: 'completion' as const, label: 'Completion Delay', color: '#f0883e', icon: '' },
           ].map(d => {
             const active = delayFilter.has(d.key);
             return (
@@ -281,6 +294,59 @@ function IndividualFilterDropdown({ onClose }: { onClose: () => void }) {
               >
                 <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: d.color, flexShrink: 0 }} />
                 {d.label}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      {/* Actual Delayed Section */}
+      <div style={{ padding: '16px', borderBottom: '1px solid var(--border-primary)' }}>
+        <div style={{ display: 'flex', alignItems: 'center', gap: '6px', marginBottom: '12px' }}>
+          <span style={{ fontSize: '12px', color: 'var(--text-secondary)' }}>Actual Delayed</span>
+          <span style={{ fontSize: '10px', fontWeight: 700, textTransform: 'uppercase', letterSpacing: '1px', color: 'var(--text-secondary)' }}>Delayed Field</span>
+        </div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: '8px' }}>
+          {[
+            { key: 'yes' as const, label: 'Yes', color: '#f85149' },
+            { key: 'no' as const, label: 'No', color: '#3fb950' },
+            { key: 'null' as const, label: 'Null', color: '#8b949e' },
+          ].map(option => {
+            const active = actualDelayedFilter.has(option.key);
+            return (
+              <div
+                key={option.key}
+                onClick={() => toggleActualDelayed(option.key)}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: '6px',
+                  padding: '6px 12px',
+                  borderRadius: '20px',
+                  fontSize: '11px',
+                  fontWeight: active ? 600 : 500,
+                  cursor: 'pointer',
+                  transition: 'all 0.2s cubic-bezier(0.4, 0, 0.2, 1)',
+                  background: active ? `${option.color}20` : 'var(--bg-tertiary)',
+                  border: active ? `1px solid ${option.color}` : '1px solid var(--border-primary)',
+                  color: active ? option.color : 'var(--text-secondary)',
+                  boxShadow: active ? `0 0 0 1px ${option.color}40, 0 2px 8px ${option.color}20` : 'none',
+                }}
+                onMouseEnter={e => {
+                  if (!active) {
+                    e.currentTarget.style.borderColor = 'var(--border-secondary)';
+                    e.currentTarget.style.background = 'var(--bg-hover)';
+                  }
+                }}
+                onMouseLeave={e => {
+                  if (!active) {
+                    e.currentTarget.style.borderColor = 'var(--border-primary)';
+                    e.currentTarget.style.background = 'var(--bg-tertiary)';
+                  }
+                }}
+              >
+                <div style={{ width: '8px', height: '8px', borderRadius: '50%', background: option.color, flexShrink: 0 }} />
+                {option.label}
               </div>
             );
           })}
@@ -387,7 +453,7 @@ export default function Header() {
   };
 
   const isTeamMode = mode === 'team';
-  const hasIndividualFilter = individualFilter.dateFrom || individualFilter.dateTo || individualFilter.statusFilter.size > 0 || individualFilter.delayFilter.size > 0;
+  const hasIndividualFilter = individualFilter.dateFrom || individualFilter.dateTo || individualFilter.statusFilter.size > 0 || individualFilter.delayFilter.size > 0 || individualFilter.actualDelayedFilter.size > 0;
   const hasTasks = tasks.length > 0 || noDateTasks.length > 0;
 
   return (
@@ -480,7 +546,7 @@ export default function Header() {
                       textAlign: 'center',
                     }}
                   >
-                    {(individualFilter.dateFrom || individualFilter.dateTo ? 1 : 0) + (individualFilter.statusFilter.size > 0 ? 1 : 0) + (individualFilter.delayFilter.size > 0 ? 1 : 0)}
+                    {(individualFilter.dateFrom || individualFilter.dateTo ? 1 : 0) + (individualFilter.statusFilter.size > 0 ? 1 : 0) + (individualFilter.delayFilter.size > 0 ? 1 : 0) + (individualFilter.actualDelayedFilter.size > 0 ? 1 : 0)}
                   </span>
                 )}
               </div>
