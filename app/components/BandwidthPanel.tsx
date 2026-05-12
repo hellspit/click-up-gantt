@@ -17,6 +17,7 @@ export default function BandwidthPanel({ onClose }: Props) {
     () => computeBandwidthSummary(allIndividualTasks, allIndividualNoDateTasks),
     [allIndividualTasks, allIndividualNoDateTasks]
   );
+  const isOccupiedForTwoWeeks = bandwidth.freeDaysCount === 0;
 
   // Close on Escape key
   useEffect(() => {
@@ -76,12 +77,12 @@ export default function BandwidthPanel({ onClose }: Props) {
             <div className="bw-panel-stat-row">
               <div className="bw-panel-stat-label">
                 <span className="bw-panel-stat-dot" style={{
-                  background: bandwidth.freeDaysCount > 0 ? '#3fb950' : '#f0883e',
+                  background: isOccupiedForTwoWeeks ? '#f0883e' : '#3fb950',
                 }} />
-                Bandwidth
+                Occupied (2 weeks)
               </div>
-              <div className={`bw-panel-stat-value ${bandwidth.freeDaysCount > 0 ? 'bw-panel-val-yes' : 'bw-panel-val-no'}`}>
-                {bandwidth.freeDaysCount > 0 ? 'Yes' : 'No'}
+              <div className={`bw-panel-stat-value ${isOccupiedForTwoWeeks ? 'bw-panel-val-no' : 'bw-panel-val-yes'}`}>
+                {isOccupiedForTwoWeeks ? 'Yes' : 'No'}
               </div>
             </div>
 
