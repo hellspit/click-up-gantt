@@ -48,6 +48,8 @@ export interface BandwidthSummary {
   hasWorkInNext14Days: boolean;
   /** Number of free days (gaps between tasks) within the next 14 days */
   freeDaysCount: number;
+  /** Number of free days until the assignee is completely free */
+  freeDaysUntilCompletelyFree: number;
   /** The specific free date ranges within the next 14 days */
   freeGaps: { from: Date; to: Date; days: number; label: string }[];
   /** Date from which the assignee is completely free (no more tasks) */
@@ -92,29 +94,6 @@ export function computeBandwidthSummary(
   const datedTasks = allTasks.filter(t => t.startDate && t.endDate);
   const allGaps = findFreeGaps(datedTasks);
 
-  // Clip gaps to the 14-day window
-  const clippedGaps: { from: Date; to: Date; days: number; label: string }[] = [];
-  let totalFreeDays = 0;
-
-  for (const gap of allGaps) {
-    // Only care about gaps that overlap [today, in14Days]
-    if (gap.to < today || gap.from > in14Days) continue;
-
-    const clippedFrom = gap.from < today ? new Date(today) : new Date(gap.from);
-    const clippedTo = gap.to > in14Days ? new Date(in14Days) : new Date(gap.to);
-    const clippedDays = daysBetween(clippedFrom, clippedTo) + 1;
-
-    if (clippedDays > 0) {
-      clippedGaps.push({
-        from: clippedFrom,
-        to: clippedTo,
-        days: clippedDays,
-        label: `${formatDateShort(clippedFrom)} – ${formatDateShort(clippedTo)}`,
-      });
-      totalFreeDays += clippedDays;
-    }
-  }
-
   // Completely free from: the day after the latest active task's end date
   let latestEndDate: Date | null = null;
   for (const t of activeTasks) {
@@ -134,10 +113,88 @@ export function computeBandwidthSummary(
     freeFromLabel = formatDateShort(nextDay);
   }
 
+  // Calculate free days using a daily check for robustness (starting from tomorrow)
+  const tomorrow = new Date(today);
+  tomorrow.setDate(tomorrow.getDate() + 1);
+
+  let totalFreeDays = 0;
+  let freeDaysUntilCompletelyFree = 0;
+
+  // 1. Next 14 days (from tomorrow)
+  const checkDay14 = new Date(tomorrow);
+  for (let i = 1; i <= 14; i++) {
+    const isWorking = datedTasks.some(t => t.startDate && t.endDate && checkDay14 >= t.startDate && checkDay14 <= t.endDate);
+    if (!isWorking) {
+      totalFreeDays++;
+    }
+    checkDay14.setDate(checkDay14.getDate() + 1);
+  }
+
+  // 2. Until completely free (from tomorrow)
+  if (!isFreeNow && latestEndDate && latestEndDate >= tomorrow) {
+    const checkDayEnd = new Date(tomorrow);
+    while (checkDayEnd <= latestEndDate) {
+      const isWorking = datedTasks.some(t => t.startDate && t.endDate && checkDayEnd >= t.startDate && checkDayEnd <= t.endDate);
+      if (!isWorking) {
+        freeDaysUntilCompletelyFree++;
+      }
+      checkDayEnd.setDate(checkDayEnd.getDate() + 1);
+    }
+  }
+
+  // Calculate free gaps until completely free (from tomorrow)
+  const freeGapsUntilCompletelyFree: { from: Date; to: Date; days: number; label: string }[] = [];
+  
+  if (!isFreeNow && latestEndDate && latestEndDate >= tomorrow) {
+    let currentGapStart: Date | null = null;
+    let currentGapDays = 0;
+    const checkDayGap = new Date(tomorrow);
+    
+    while (checkDayGap <= latestEndDate) {
+      const isWorking = datedTasks.some(t => t.startDate && t.endDate && checkDayGap >= t.startDate && checkDayGap <= t.endDate);
+      
+      if (!isWorking) {
+        if (!currentGapStart) {
+          currentGapStart = new Date(checkDayGap);
+        }
+        currentGapDays++;
+      } else {
+        if (currentGapStart) {
+          const gapEnd = new Date(checkDayGap);
+          gapEnd.setDate(gapEnd.getDate() - 1);
+          freeGapsUntilCompletelyFree.push({
+            from: new Date(currentGapStart),
+            to: gapEnd,
+            days: currentGapDays,
+            label: currentGapStart.getTime() === gapEnd.getTime() 
+              ? formatDateShort(currentGapStart)
+              : `${formatDateShort(currentGapStart)} - ${formatDateShort(gapEnd)}`
+          });
+          currentGapStart = null;
+          currentGapDays = 0;
+        }
+      }
+      checkDayGap.setDate(checkDayGap.getDate() + 1);
+    }
+    // If gap extends to end, though latestEndDate is usually a working day
+    if (currentGapStart) {
+      const gapEnd = new Date(latestEndDate);
+      freeGapsUntilCompletelyFree.push({
+        from: new Date(currentGapStart),
+        to: gapEnd,
+        days: currentGapDays,
+        label: currentGapStart.getTime() === gapEnd.getTime() 
+          ? formatDateShort(currentGapStart)
+          : `${formatDateShort(currentGapStart)} - ${formatDateShort(gapEnd)}`
+      });
+    }
+  }
+
   return {
     hasWorkInNext14Days,
     freeDaysCount: totalFreeDays,
-    freeGaps: clippedGaps,
+    freeDaysUntilCompletelyFree,
+    freeGaps: freeGapsUntilCompletelyFree,
     completelyFreeFrom,
     isFreeNow,
     freeFromLabel,
