@@ -261,6 +261,33 @@ function filterTasksIndividual(
   return result;
 }
 
+function filterTasksForView(
+  tasks: NormalizedTask[],
+  activeView: ActiveView,
+  selectedUserId: string | null
+): NormalizedTask[] {
+  if (!selectedUserId) return tasks;
+
+  const assignedTasks = tasks.filter(task =>
+    task.assignees.some(a => String(a.id) === selectedUserId)
+  );
+
+  if (activeView !== 'gantt-us') {
+    return assignedTasks;
+  }
+
+  const assignedTaskIds = new Set(assignedTasks.map(t => t.id));
+  const parentIdsNeeded = new Set(
+    assignedTasks
+      .filter(t => t.parent)
+      .map(t => t.parent as string)
+  );
+
+  return tasks.filter(task =>
+    assignedTaskIds.has(task.id) || parentIdsNeeded.has(task.id)
+  );
+}
+
 function extractUniqueStatuses(tasks: NormalizedTask[]): string[] {
   // Always include standard statuses so the user has the full array of options
   const set = new Set<string>(['open', 'to do', 'in progress', 'review', 'done', 'closed']);
@@ -462,7 +489,11 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         displayUndated = filterTasksIndividual(displayUndated, currentFilter);
       }
 
-      const tz = getViewTimezone(get().activeView);
+      const activeView = get().activeView;
+      displayDated = filterTasksForView(displayDated, activeView, selectedUserId);
+      displayUndated = filterTasksForView(displayUndated, activeView, selectedUserId);
+
+      const tz = getViewTimezone(activeView);
       const display = processNormalizedTasks(displayDated, displayUndated, get().ganttScale, tz);
 
       set({
@@ -608,7 +639,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
     const filteredDated = filterTasksByMembers(allTeamTasks, newFilter);
     const filteredUndated = filterTasksByMembers(allTeamNoDateTasks, newFilter);
-    const processed = processNormalizedTasks(filteredDated, filteredUndated, get().ganttScale);
+    const tz = getViewTimezone(get().activeView);
+    const processed = processNormalizedTasks(filteredDated, filteredUndated, get().ganttScale, tz);
 
     set({
       teamMemberFilter: newFilter,
@@ -619,7 +651,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   clearMemberFilter: () => {
     const { allTeamTasks, allTeamNoDateTasks } = get();
-    const processed = processNormalizedTasks(allTeamTasks, allTeamNoDateTasks, get().ganttScale);
+    const tz = getViewTimezone(get().activeView);
+    const processed = processNormalizedTasks(allTeamTasks, allTeamNoDateTasks, get().ganttScale, tz);
     set({
       teamMemberFilter: new Set(),
       ...processed,
@@ -630,7 +663,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   selectAllMembers: () => {
     // selecting all = same as clearing filter
     const { allTeamTasks, allTeamNoDateTasks } = get();
-    const processed = processNormalizedTasks(allTeamTasks, allTeamNoDateTasks, get().ganttScale);
+    const tz = getViewTimezone(get().activeView);
+    const processed = processNormalizedTasks(allTeamTasks, allTeamNoDateTasks, get().ganttScale, tz);
     set({
       teamMemberFilter: new Set(),
       ...processed,
@@ -683,10 +717,13 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
       actualDelayedFilter: partial.actualDelayedFilter !== undefined ? partial.actualDelayedFilter : individualFilter.actualDelayedFilter,
     };
 
-    const filteredDated = filterTasksIndividual(allIndividualTasks, newFilter);
-    const filteredUndated = filterTasksIndividual(allIndividualNoDateTasks, newFilter);
-    const tz = getViewTimezone(get().activeView);
-    const processed = processNormalizedTasks(filteredDated, filteredUndated, get().ganttScale, tz);
+    let filteredDated = filterTasksIndividual(allIndividualTasks, newFilter);
+    let filteredUndated = filterTasksIndividual(allIndividualNoDateTasks, newFilter);
+    const { activeView, selectedUserId, ganttScale } = get();
+    filteredDated = filterTasksForView(filteredDated, activeView, selectedUserId);
+    filteredUndated = filterTasksForView(filteredUndated, activeView, selectedUserId);
+    const tz = getViewTimezone(activeView);
+    const processed = processNormalizedTasks(filteredDated, filteredUndated, ganttScale, tz);
 
     set({
       individualFilter: newFilter,
@@ -696,9 +733,13 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   },
 
   clearIndividualFilter: () => {
-    const { allIndividualTasks, allIndividualNoDateTasks } = get();
-    const tz = getViewTimezone(get().activeView);
-    const processed = processNormalizedTasks(allIndividualTasks, allIndividualNoDateTasks, get().ganttScale, tz);
+    const { allIndividualTasks, allIndividualNoDateTasks, activeView, selectedUserId, ganttScale } = get();
+    let filteredDated = allIndividualTasks;
+    let filteredUndated = allIndividualNoDateTasks;
+    filteredDated = filterTasksForView(filteredDated, activeView, selectedUserId);
+    filteredUndated = filterTasksForView(filteredUndated, activeView, selectedUserId);
+    const tz = getViewTimezone(activeView);
+    const processed = processNormalizedTasks(filteredDated, filteredUndated, ganttScale, tz);
     set({
       individualFilter: { dateFrom: null, dateTo: null, statusFilter: new Set(), delayFilter: new Set(), actualDelayedFilter: new Set() },
       ...processed,
@@ -718,35 +759,51 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
     const prevView = get().activeView;
     set({ activeView: view });
 
-    // Reprocess tasks when timezone changes (gantt ↔ gantt-us)
-    const prevTz = getViewTimezone(prevView);
-    const newTz = getViewTimezone(view);
-    if (prevTz !== newTz) {
-      const { mode, allIndividualTasks, allIndividualNoDateTasks, individualFilter, ganttScale } = get();
-      if (mode === 'individual' && (allIndividualTasks.length > 0 || allIndividualNoDateTasks.length > 0)) {
-        const filteredDated = filterTasksIndividual(allIndividualTasks, individualFilter);
-        const filteredUndated = filterTasksIndividual(allIndividualNoDateTasks, individualFilter);
-        const processed = processNormalizedTasks(filteredDated, filteredUndated, ganttScale, newTz);
+    const { mode, allIndividualTasks, allIndividualNoDateTasks, individualFilter, ganttScale, selectedUserId } = get();
+    if (mode === 'individual') {
+      if (allIndividualTasks.length > 0 || allIndividualNoDateTasks.length > 0) {
+        let filteredDated = filterTasksIndividual(allIndividualTasks, individualFilter);
+        let filteredUndated = filterTasksIndividual(allIndividualNoDateTasks, individualFilter);
+        filteredDated = filterTasksForView(filteredDated, view, selectedUserId);
+        filteredUndated = filterTasksForView(filteredUndated, view, selectedUserId);
+        const tz = getViewTimezone(view);
+        const processed = processNormalizedTasks(filteredDated, filteredUndated, ganttScale, tz);
         set({ ...processed });
+      }
+    } else {
+      // Team mode - timezone change check
+      const prevTz = getViewTimezone(prevView);
+      const newTz = getViewTimezone(view);
+      if (prevTz !== newTz) {
+        const { allTeamTasks, allTeamNoDateTasks, teamMemberFilter } = get();
+        if (allTeamTasks.length > 0 || allTeamNoDateTasks.length > 0) {
+          const filteredDated = filterTasksByMembers(allTeamTasks, teamMemberFilter);
+          const filteredUndated = filterTasksByMembers(allTeamNoDateTasks, teamMemberFilter);
+          const processed = processNormalizedTasks(filteredDated, filteredUndated, ganttScale, newTz);
+          set({ ...processed });
+        }
       }
     }
   },
 
   setGanttScale: (scale: GanttScale) => {
-    const { mode, tasks, noDateTasks, allIndividualTasks, allIndividualNoDateTasks, individualFilter, allTeamTasks, allTeamNoDateTasks, teamMemberFilter } = get();
+    const { mode, tasks, noDateTasks, allIndividualTasks, allIndividualNoDateTasks, individualFilter, allTeamTasks, allTeamNoDateTasks, teamMemberFilter, activeView, selectedUserId } = get();
     
     if (mode === 'individual') {
-      // Re-filter with current filter, then recompute timeline with new scale
-      const filteredDated = filterTasksIndividual(allIndividualTasks, individualFilter);
-      const filteredUndated = filterTasksIndividual(allIndividualNoDateTasks, individualFilter);
-      const tz = getViewTimezone(get().activeView);
+      // Re-filter with current filter, then view-filter, then recompute timeline with new scale
+      let filteredDated = filterTasksIndividual(allIndividualTasks, individualFilter);
+      let filteredUndated = filterTasksIndividual(allIndividualNoDateTasks, individualFilter);
+      filteredDated = filterTasksForView(filteredDated, activeView, selectedUserId);
+      filteredUndated = filterTasksForView(filteredUndated, activeView, selectedUserId);
+      const tz = getViewTimezone(activeView);
       const processed = processNormalizedTasks(filteredDated, filteredUndated, scale, tz);
       set({ ganttScale: scale, ...processed });
     } else {
       // Team mode — respect member filter
       const filteredDated = filterTasksByMembers(allTeamTasks, teamMemberFilter);
       const filteredUndated = filterTasksByMembers(allTeamNoDateTasks, teamMemberFilter);
-      const processed = processNormalizedTasks(filteredDated, filteredUndated, scale);
+      const tz = getViewTimezone(activeView);
+      const processed = processNormalizedTasks(filteredDated, filteredUndated, scale, tz);
       set({ ganttScale: scale, ...processed });
     }
   },

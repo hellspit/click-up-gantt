@@ -56,9 +56,50 @@ export async function GET(req: NextRequest) {
       page++;
     }
 
+    // Fetch missing parent tasks
+    const existingTaskIds = new Set(allTasks.map(t => t.id));
+    const missingParentIds = Array.from(
+      new Set(
+        allTasks
+          .map(t => t.parent)
+          .filter((p): p is string => typeof p === 'string' && p !== '' && !existingTaskIds.has(p))
+      )
+    );
+
+    if (missingParentIds.length > 0) {
+      const results = await Promise.allSettled(
+        missingParentIds.map(async (pid) => {
+          const res = await fetch(`https://api.clickup.com/api/v2/task/${pid}`, {
+            headers: { Authorization: apiKey },
+          });
+          if (!res.ok) {
+            throw new Error(`Failed to fetch parent task ${pid}: ${res.status}`);
+          }
+          return res.json();
+        })
+      );
+
+      for (const result of results) {
+        if (result.status === 'fulfilled' && result.value) {
+          allTasks.push(result.value);
+        } else if (result.status === 'rejected') {
+          console.error(`[API Tasks] Error fetching parent task:`, result.reason);
+        }
+      }
+    }
+
+    // Deduplicate allTasks by ID
+    const seen = new Set<string>();
+    const uniqueTasks = allTasks.filter(t => {
+      if (!t || !t.id) return false;
+      if (seen.has(t.id)) return false;
+      seen.add(t.id);
+      return true;
+    });
+
     return NextResponse.json({
-      tasks: allTasks,
-      meta: { total: allTasks.length, pages: page, hasMore: page >= MAX_PAGES },
+      tasks: uniqueTasks,
+      meta: { total: uniqueTasks.length, pages: page, hasMore: page >= MAX_PAGES },
     });
   } catch (err: any) {
     return NextResponse.json({ error: `Failed to fetch tasks: ${err.message}` }, { status: 500 });
