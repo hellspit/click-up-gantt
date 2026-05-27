@@ -1,4 +1,4 @@
-import { TimelineConfig, GanttScale } from '../types';
+import { TimelineConfig, GanttScale, NormalizedTask } from '../types';
 
 export function convertClickUpDate(timestamp: string | number | null | undefined): Date | null {
   if (timestamp === null || timestamp === undefined) return null;
@@ -392,3 +392,50 @@ function generateQuarterBuckets(
   return { buckets, groups };
 }
 
+// ── Timezone shifting ──
+
+/**
+ * Create a new Date whose local methods (.getDate(), .getMonth(), etc.)
+ * return values matching the wall-clock time in the target timezone.
+ */
+export function shiftDateToTimezone(date: Date, targetTz: string): Date {
+  const parts = new Intl.DateTimeFormat('en-US', {
+    timeZone: targetTz,
+    year: 'numeric',
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    second: '2-digit',
+    hour12: false,
+  }).formatToParts(date);
+  const g = (type: string) => parseInt(parts.find(p => p.type === type)?.value || '0');
+  return new Date(g('year'), g('month') - 1, g('day'), g('hour'), g('minute'), g('second'));
+}
+
+/**
+ * Return a shallow copy of the task with every Date field shifted to
+ * the target timezone. Planned-date custom fields are also shifted.
+ */
+export function shiftTaskToTimezone(task: NormalizedTask, targetTz: string): NormalizedTask {
+  const shift = (d: Date | null): Date | null => d ? shiftDateToTimezone(d, targetTz) : null;
+  return {
+    ...task,
+    startDate: shift(task.startDate),
+    endDate: shift(task.endDate),
+    dateCreated: shiftDateToTimezone(task.dateCreated, targetTz),
+    dateCompleted: shift(task.dateCompleted),
+    customFields: task.customFields.map(cf => {
+      const cfName = cf.name.toLowerCase();
+      if (cfName.includes('planned') && (cfName.includes('start') || cfName.includes('due'))) {
+        const ts = Number(cf.value);
+        if (!isNaN(ts) && ts > 0) {
+          const orig = ts > 1000000000000 ? new Date(ts) : new Date(ts * 1000);
+          const shifted = shiftDateToTimezone(orig, targetTz);
+          return { ...cf, value: String(shifted.getTime()) };
+        }
+      }
+      return cf;
+    }),
+  };
+}

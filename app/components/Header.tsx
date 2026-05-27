@@ -7,6 +7,7 @@ import BandwidthPanel from './BandwidthPanel';
 
 const VIEW_TABS = [
   { key: 'gantt' as const, icon: '', label: 'Gantt' },
+  { key: 'gantt-us' as const, icon: '', label: 'Gantt-US' },
   { key: 'list' as const, icon: '', label: 'List' },
   { key: 'status' as const, icon: '', label: 'Status' },
 ];

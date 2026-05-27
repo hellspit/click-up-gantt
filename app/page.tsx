@@ -37,6 +37,12 @@ export default function Home() {
           <NoDateTasks />
         </>
       )}
+      {activeView === 'gantt-us' && (
+        <>
+          <Dashboard />
+          <NoDateTasks />
+        </>
+      )}
       {activeView === 'list' && <ListView />}
       {activeView === 'status' && <StatusView />}
       <TaskDetailPanel />

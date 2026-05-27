@@ -296,14 +296,14 @@ function renderBody(
           if (diff > ONE_DAY_MS) {
             hasCompletionDelay = true;
             compDelayDays = Math.round(diff / ONE_DAY_MS);
-            compDelayX = hasProjectLengthDelay ? projDelayX + projDelayW : (hasPlannedDates ? plannedX + plannedW : dateToPx(t.endDate, startDate, pxPerDay));
+            compDelayX = dateToPx(t.endDate, startDate, pxPerDay);
             compDelayW = dateToPx(doneDay, startDate, pxPerDay) - compDelayX;
           }
         }
 
         // Compute the full extent of the double bar group (for the connecting bracket)
         const groupLeftX = hasPlannedDates ? Math.min(plannedX, x) : x;
-        const baseRightX = hasPlannedDates ? plannedX + plannedW : x + w;
+        const baseRightX = hasPlannedDates ? Math.max(plannedX + plannedW, x + w) : x + w;
         let delayRightX = baseRightX;
         if (hasProjectLengthDelay && projDelayW > 0) delayRightX = Math.max(delayRightX, projDelayX + projDelayW);
         if (hasCompletionDelay && compDelayW > 0) delayRightX = Math.max(delayRightX, compDelayX + compDelayW);
@@ -316,7 +316,7 @@ function renderBody(
               <rect
                 x={groupLeftX - 1}
                 y={barGroupY - 1}
-                width={Math.max(plannedW, w) + 2}
+                width={baseRightX - groupLeftX + 2}
                 height={totalBarH + 2}
                 rx={4}
                 fill="rgba(255,255,255,0.03)"
@@ -328,10 +328,10 @@ function renderBody(
             {/* ========== LEFT DATE LABELS ========== */}
             {hasPlannedDates ? (
               <>
-                <text x={groupLeftX - 4} y={topBarY + barH - 2} fill="#8b949e" fontSize={8} fontFamily="var(--font-sans)" textAnchor="end">
+                <text x={plannedX - 4} y={topBarY + barH - 2} fill="#8b949e" fontSize={8} fontFamily="var(--font-sans)" textAnchor="end">
                   {plannedStartDate ? formatDateCompact(plannedStartDate) : ''}
                 </text>
-                <text x={groupLeftX - 4} y={bottomBarY + barH - 2} fill="#8b949e" fontSize={8} fontFamily="var(--font-sans)" textAnchor="end">
+                <text x={x - 4} y={bottomBarY + barH - 2} fill="#8b949e" fontSize={8} fontFamily="var(--font-sans)" textAnchor="end">
                   {t.startDate ? formatDateCompact(t.startDate) : ''}
                 </text>
               </>
@@ -356,9 +356,9 @@ function renderBody(
 
             {/* ========== BOTTOM BAR: ACTUAL TIMELINE ========== */}
             <rect
-              x={hasPlannedDates ? plannedX : x}
+              x={x}
               y={hasPlannedDates ? bottomBarY : topBarY}
-              width={hasPlannedDates ? plannedW : w}
+              width={hasPlannedDates && hasProjectLengthDelay ? plannedW : w}
               height={hasPlannedDates ? barH : totalBarH}
               rx={2}
               ry={2}
@@ -367,8 +367,8 @@ function renderBody(
             />
 
             {/* Small "A" label inside bottom bar */}
-            {hasPlannedDates && plannedW > 24 && (
-              <text x={plannedX + 5} y={bottomBarY + barH - 2.5} fill="rgba(255,255,255,0.85)" fontSize={7} fontWeight={700} fontFamily="var(--font-sans)">A</text>
+            {hasPlannedDates && (hasProjectLengthDelay ? plannedW : w) > 24 && (
+              <text x={x + 5} y={bottomBarY + barH - 2.5} fill="rgba(255,255,255,0.85)" fontSize={7} fontWeight={700} fontFamily="var(--font-sans)">A</text>
             )}
 
             {/* ========== RIGHT DATE LABELS ========== */}
@@ -428,8 +428,8 @@ function renderBody(
             )}
 
             {/* Status label below the double bar */}
-            {(hasPlannedDates ? plannedW : w) > 60 && (
-              <text x={hasPlannedDates ? plannedX : x} y={barGroupY + totalBarH + 10} fill={color} fontSize={8} fontWeight={600} fontFamily="var(--font-sans)">
+            {w > 60 && (
+              <text x={x} y={barGroupY + totalBarH + 10} fill={color} fontSize={8} fontWeight={600} fontFamily="var(--font-sans)">
                 {label}
               </text>
             )}

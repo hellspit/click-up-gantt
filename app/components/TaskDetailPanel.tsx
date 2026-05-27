@@ -712,7 +712,7 @@ export default function TaskDetailPanel() {
           })()}
 
           {/* ── Delay Analysis (Gantt view only) ── */}
-          {activeView === 'gantt' && (() => {
+          {(activeView === 'gantt' || activeView === 'gantt-us') && (() => {
             const { delays, plannedDays, executionDays, startingDelayDays, projectLengthDelayDays, completionDelayDays } = computeDelays(task, customFields);
             if (plannedDays === null && executionDays === null) return null;
 
