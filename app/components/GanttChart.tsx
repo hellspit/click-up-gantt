@@ -264,7 +264,7 @@ function renderBody(
         let plannedW = 0;
         if (hasPlannedDates && plannedStartDate && plannedDueDate) {
           plannedX = dateToPx(plannedStartDate, startDate, pxPerDay);
-          plannedW = dateToPx(plannedDueDate, startDate, pxPerDay) - plannedX;
+          plannedW = Math.max(dateToPx(plannedDueDate, startDate, pxPerDay) - plannedX, pxPerDay);
         }
 
         // Project Length Delay: actual duration > planned duration (by > 1 day)
@@ -303,8 +303,10 @@ function renderBody(
 
         // Compute the full extent of the double bar group (for the connecting bracket)
         const groupLeftX = hasPlannedDates ? Math.min(plannedX, x) : x;
-        const baseRightX = hasPlannedDates ? Math.max(plannedX + plannedW, x + w) : x + w;
-        const delayRightX = baseRightX + (hasProjectLengthDelay ? projDelayW : 0) + (hasCompletionDelay ? compDelayW : 0);
+        const baseRightX = hasPlannedDates ? plannedX + plannedW : x + w;
+        let delayRightX = baseRightX;
+        if (hasProjectLengthDelay && projDelayW > 0) delayRightX = Math.max(delayRightX, projDelayX + projDelayW);
+        if (hasCompletionDelay && compDelayW > 0) delayRightX = Math.max(delayRightX, compDelayX + compDelayW);
 
         return (
           <g key={t.id + '-' + i}>
