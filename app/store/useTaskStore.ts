@@ -69,7 +69,7 @@ interface TaskStore {
   // Team member filter
   resolvedTeamMembers: ResolvedMember[];
   teamMemberFilter: Set<number>; // empty = show all
-  
+
   // Gantt scale
   ganttScale: GanttScale;
 
@@ -292,10 +292,10 @@ function extractUniqueStatuses(tasks: NormalizedTask[]): string[] {
   // Always include standard statuses so the user has the full array of options
   const set = new Set<string>(['open', 'to do', 'in progress', 'review', 'done', 'closed']);
   tasks.forEach(t => set.add(t.status.toLowerCase()));
-  
+
   // Order them logically from creation to completion
   const standardOrder = ['open', 'to do', 'open/to do', 'in progress', 'review', 'in review', 'done', 'complete', 'closed'];
-  
+
   return Array.from(set).sort((a, b) => {
     const idxA = standardOrder.indexOf(a);
     const idxB = standardOrder.indexOf(b);
@@ -363,7 +363,7 @@ function resolveTeamMembers(
       });
     }
 
-    // Strategy 4: Any significant word matches the start of a username/email word
+    // Strategy 4: Any significant word matches the start of a username/email word done
     if (!match) {
       const significantParts = nameParts.filter((w) => w.length >= 3);
       if (significantParts.length > 0) {
@@ -788,7 +788,7 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
 
   setGanttScale: (scale: GanttScale) => {
     const { mode, tasks, noDateTasks, allIndividualTasks, allIndividualNoDateTasks, individualFilter, allTeamTasks, allTeamNoDateTasks, teamMemberFilter, activeView, selectedUserId } = get();
-    
+
     if (mode === 'individual') {
       // Re-filter with current filter, then view-filter, then recompute timeline with new scale
       let filteredDated = filterTasksIndividual(allIndividualTasks, individualFilter);
