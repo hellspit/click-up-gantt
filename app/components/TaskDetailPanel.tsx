@@ -595,11 +595,11 @@ export default function TaskDetailPanel() {
               </div>
               {/* Execution days summary */}
               {task.startDate && task.endDate && (() => {
-                const execDays = Math.round((task.endDate.getTime() - task.startDate.getTime()) / 86400000);
+                const execDays = Math.max(1, Math.round((task.endDate.getTime() - task.startDate.getTime()) / 86400000));
                 // Compute delay = execution days - planned days
                 const pStartDate = parseCfTimestamp(plannedStart);
                 const pDueDate = parseCfTimestamp(plannedDue);
-                const plannedDayCount = pStartDate && pDueDate ? Math.round((pDueDate.getTime() - pStartDate.getTime()) / 86400000) : null;
+                const plannedDayCount = pStartDate && pDueDate ? Math.max(1, Math.round((pDueDate.getTime() - pStartDate.getTime()) / 86400000)) : null;
                 const delayDays = plannedDayCount !== null ? execDays - plannedDayCount : null;
                 // Completion delay
                 let completionDelayDays: number | null = null;
@@ -660,7 +660,7 @@ export default function TaskDetailPanel() {
                   const pStartDate = parseCfTimestamp(plannedStart);
                   const pDueDate = parseCfTimestamp(plannedDue);
                   if (!pStartDate || !pDueDate) return null;
-                  const days = Math.round((pDueDate.getTime() - pStartDate.getTime()) / 86400000);
+                  const days = Math.max(1, Math.round((pDueDate.getTime() - pStartDate.getTime()) / 86400000));
                   return (
                     <div style={{ marginTop: '6px', fontSize: '11px' }}>
                       <span style={{ color: 'var(--text-secondary)', fontWeight: 600 }}>({days}d)</span>
