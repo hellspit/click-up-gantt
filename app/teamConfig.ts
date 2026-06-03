@@ -69,7 +69,7 @@ export const TEAMS: TeamDef[] = [
   },
   {
     key: 'fw',
-    name: 'Firmware(FW)',
+    name: 'Firmware',
     description: 'Firmware Team',
     color: '#ff9f43',
     icon: 'FW',
@@ -87,7 +87,7 @@ export const TEAMS: TeamDef[] = [
   },
   {
     key: 'hw',
-    name: 'Hardware(HW)',
+    name: 'Hardware',
     description: 'Hardware Team',
     color: '#ff6b6b',
     icon: 'HW',
