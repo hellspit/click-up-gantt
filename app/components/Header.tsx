@@ -609,6 +609,7 @@ export default function Header() {
               { key: 'gantt' as const, icon: '', label: 'Pie' },
               { key: 'list' as const, icon: '', label: 'List' },
               { key: 'status' as const, icon: '', label: 'Status' },
+              { key: 'bandwidth' as const, icon: '', label: 'Bandwidth' },
             ]
           : VIEW_TABS
         ).map(tab => (

@@ -7,7 +7,7 @@ import { getTimelineConfig, shiftTaskToTimezone } from '../utils/dateUtils';
 import { buildTaskHierarchy } from '../utils/taskGrouper';
 import { getTeamByKey } from '../teamConfig';
 
-type ActiveView = 'gantt' | 'gantt-us' | 'list' | 'status';
+type ActiveView = 'gantt' | 'gantt-us' | 'list' | 'status' | 'bandwidth';
 type AppMode = 'individual' | 'team';
 
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
@@ -18,6 +18,8 @@ interface CachedTeamData {
   treeRows: TreeRow[];
   timelineConfig: TimelineConfig | null;
   timestamp: number;
+  resolvedTeamMembers: ResolvedMember[];
+  activeUserIds: number[];
 }
 
 interface ResolvedMember {
@@ -533,6 +535,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         timelineConfig: cached.timelineConfig,
         allTeamTasks: cached.tasks,
         allTeamNoDateTasks: cached.noDateTasks,
+        resolvedTeamMembers: cached.resolvedTeamMembers || [],
+        activeUserIds: cached.activeUserIds || [],
         activeTeamKey: teamKey,
         selectedUserName: team.name,
         teamMemberFilter: new Set(),
@@ -604,6 +608,8 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
         ...get().teamTasksCache,
         [teamKey]: {
           ...processed,
+          resolvedTeamMembers: resolved,
+          activeUserIds: resolved.map(m => m.id),
           timestamp: Date.now(),
         },
       };

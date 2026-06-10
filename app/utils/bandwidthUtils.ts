@@ -60,6 +60,14 @@ export interface BandwidthSummary {
   freeFromLabel: string;
 }
 
+export function isActiveBandwidthTask(t: NormalizedTask): boolean {
+  const s = t.status.toLowerCase();
+  return !(
+    s.includes('complete') || s.includes('done') ||
+    s.includes('resolved') || s.includes('closed') || s.includes('archived')
+  );
+}
+
 /**
  * Compute bandwidth summary for a given set of tasks (all tasks for one assignee).
  */
@@ -75,13 +83,7 @@ export function computeBandwidthSummary(
   in14Days.setDate(in14Days.getDate() + 14);
 
   // Active (non-completed) tasks
-  const activeTasks = allTasks.filter(t => {
-    const s = t.status.toLowerCase();
-    return !(
-      s.includes('complete') || s.includes('done') ||
-      s.includes('resolved') || s.includes('closed') || s.includes('archived')
-    );
-  });
+  const activeTasks = allTasks.filter(isActiveBandwidthTask);
 
   // Check if any active task overlaps the next 14 days
   const hasWorkInNext14Days = activeTasks.some(t => {

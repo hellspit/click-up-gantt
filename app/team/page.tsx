@@ -7,6 +7,7 @@ import Header from '../components/Header';
 import PieChartView from '../components/PieChartView';
 import ListView from '../components/ListView';
 import StatusView from '../components/StatusView';
+import BandwidthView from '../components/BandwidthView';
 import TaskDetailPanel from '../components/TaskDetailPanel';
 
 function TeamCard({
@@ -404,6 +405,7 @@ export default function TeamPage() {
           {activeView === 'gantt' && <PieChartView />}
           {activeView === 'list' && <ListView />}
           {activeView === 'status' && <StatusView />}
+          {activeView === 'bandwidth' && <BandwidthView />}
         </>
       )}
 

@@ -77,11 +77,11 @@ export default function BandwidthPanel({ onClose }: Props) {
             <div className="bw-panel-stat-row">
               <div className="bw-panel-stat-label">
                 <span className="bw-panel-stat-dot" style={{
-                  background: isOccupiedForTwoWeeks ? '#f0883e' : '#3fb950',
+                  background: isOccupiedForTwoWeeks ? '#3fb950' : '#f85149',
                 }} />
                 Occupied (2 weeks)
               </div>
-              <div className={`bw-panel-stat-value ${isOccupiedForTwoWeeks ? 'bw-panel-val-no' : 'bw-panel-val-yes'}`}>
+              <div className={`bw-panel-stat-value ${isOccupiedForTwoWeeks ? 'bw-panel-val-yes' : 'bw-panel-val-no'}`}>
                 {isOccupiedForTwoWeeks ? 'Yes' : 'No'}
               </div>
             </div>
