@@ -9,6 +9,7 @@ import ListView from '../components/ListView';
 import StatusView from '../components/StatusView';
 import BandwidthView from '../components/BandwidthView';
 import TaskDetailPanel from '../components/TaskDetailPanel';
+import IndividualFilterDropdown from '../components/IndividualFilterDropdown';
 
 function TeamCard({
   team,
@@ -228,11 +229,15 @@ export default function TeamPage() {
     fetchMembers,
     teamMemberFilter,
     resolvedTeamMembers,
+    teamFilter,
   } = useTaskStore();
 
   const [showSelector, setShowSelector] = useState(true);
   const [showFilter, setShowFilter] = useState(false);
   const filterRef = useRef<HTMLDivElement>(null);
+
+  const [showTaskFilter, setShowTaskFilter] = useState(false);
+  const taskFilterRef = useRef<HTMLDivElement>(null);
 
   // Set team mode on mount + ensure members are loaded
   useEffect(() => {
@@ -243,19 +248,23 @@ export default function TeamPage() {
     }
   }, [fetchMembers]);
 
-  // Close filter dropdown on outside click
+  // Close filter dropdowns on outside click
   useEffect(() => {
     const handler = (e: MouseEvent) => {
       if (filterRef.current && !filterRef.current.contains(e.target as Node)) {
         setShowFilter(false);
       }
+      if (taskFilterRef.current && !taskFilterRef.current.contains(e.target as Node)) {
+        setShowTaskFilter(false);
+      }
     };
-    if (showFilter) {
+    if (showFilter || showTaskFilter) {
       document.addEventListener('mousedown', handler);
     }
     return () => document.removeEventListener('mousedown', handler);
-  }, [showFilter]);
+  }, [showFilter, showTaskFilter]);
 
+  const hasTeamFilter = teamFilter.dateFrom || teamFilter.dateTo || teamFilter.statusFilter.size > 0 || teamFilter.delayFilter.size > 0 || teamFilter.actualDelayedFilter.size > 0;
   const hasTasks = tasks.length > 0 || noDateTasks.length > 0;
   const isFiltering = teamMemberFilter.size > 0;
 
@@ -290,7 +299,7 @@ export default function TeamPage() {
             {selectedTeam.description} · {tasks.length + noDateTasks.length} tasks
           </span>
 
-          {/* Filter button */}
+          {/* Member Filter button */}
           {resolvedTeamMembers.length > 0 && (
             <div ref={filterRef} style={{ position: 'relative', marginLeft: '12px' }}>
               <div
@@ -311,7 +320,7 @@ export default function TeamPage() {
                   transition: 'all 0.2s',
                 }}
               >
-                Filter
+                Members
                 {isFiltering && (
                   <span
                     style={{
@@ -332,6 +341,47 @@ export default function TeamPage() {
               {showFilter && <MemberFilterDropdown onClose={() => setShowFilter(false)} />}
             </div>
           )}
+
+          {/* Task Filter button */}
+          <div ref={taskFilterRef} style={{ position: 'relative', marginLeft: '12px' }}>
+            <div
+              onClick={() => setShowTaskFilter(!showTaskFilter)}
+              style={{
+                display: 'flex',
+                alignItems: 'center',
+                gap: '6px',
+                padding: '5px 12px',
+                background: hasTeamFilter ? 'rgba(88, 166, 255, 0.1)' : 'transparent',
+                border: hasTeamFilter ? '1px solid var(--status-todo)' : '1px solid var(--border-secondary)',
+                borderRadius: '6px',
+                fontSize: '11px',
+                fontWeight: 600,
+                color: hasTeamFilter ? 'var(--text-primary)' : 'var(--text-secondary)',
+                cursor: 'pointer',
+                whiteSpace: 'nowrap',
+                transition: 'all 0.2s',
+              }}
+            >
+              Filter Tasks
+              {hasTeamFilter && (
+                <span
+                  style={{
+                    background: 'var(--status-todo)',
+                    color: '#fff',
+                    fontSize: '9px',
+                    fontWeight: 700,
+                    padding: '1px 6px',
+                    borderRadius: '8px',
+                    minWidth: '16px',
+                    textAlign: 'center',
+                  }}
+                >
+                  {(teamFilter.dateFrom || teamFilter.dateTo ? 1 : 0) + (teamFilter.statusFilter.size > 0 ? 1 : 0) + (teamFilter.delayFilter.size > 0 ? 1 : 0) + (teamFilter.actualDelayedFilter.size > 0 ? 1 : 0)}
+                </span>
+              )}
+            </div>
+            {showTaskFilter && <IndividualFilterDropdown onClose={() => setShowTaskFilter(false)} />}
+          </div>
 
           <div className="team-active-spacer" />
           <div

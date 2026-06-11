@@ -35,6 +35,22 @@ export async function GET(req: NextRequest) {
 
     const task = await taskRes.json();
     
+    let parentName = null;
+    if (task.parent) {
+      try {
+        const parentRes = await fetch(
+          `https://api.clickup.com/api/v2/task/${task.parent}`,
+          { headers: { Authorization: apiKey } }
+        );
+        if (parentRes.ok) {
+          const parentData = await parentRes.json();
+          parentName = parentData.name || null;
+        }
+      } catch (e) {
+        // Ignore parent fetch errors
+      }
+    }
+
     let comments = [];
     if (commentsRes.ok) {
       const commentsData = await commentsRes.json();
@@ -71,6 +87,7 @@ export async function GET(req: NextRequest) {
       customFields,
       description: task.description,
       text_content: task.text_content,
+      parentName,
       comments: comments.map((c: any) => ({
         id: c.id,
         comment_text: c.comment_text || '',

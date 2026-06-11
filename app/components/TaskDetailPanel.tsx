@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useTaskStore } from '../store/useTaskStore';
 import { CustomField, NormalizedTask } from '../types';
 
@@ -448,7 +448,27 @@ export default function TaskDetailPanel() {
   const [fetchedFields, setFetchedFields] = useState<CustomField[]>([]);
   const [taskDescription, setTaskDescription] = useState<string>('');
   const [taskComments, setTaskComments] = useState<any[]>([]);
+  const [fetchedParentName, setFetchedParentName] = useState<string | null>(null);
   const [loadingFields, setLoadingFields] = useState(false);
+
+  const allIndividualTasks = useTaskStore(s => s.allIndividualTasks);
+  const allIndividualNoDateTasks = useTaskStore(s => s.allIndividualNoDateTasks);
+  const allTeamTasks = useTaskStore(s => s.allTeamTasks);
+  const allTeamNoDateTasks = useTaskStore(s => s.allTeamNoDateTasks);
+
+  // Look up parent task name in local store cache
+  const localParentName = useMemo(() => {
+    if (!task || !task.parent) return null;
+    const parentId = task.parent;
+    const found =
+      allIndividualTasks.find(t => t.id === parentId) ||
+      allIndividualNoDateTasks.find(t => t.id === parentId) ||
+      allTeamTasks.find(t => t.id === parentId) ||
+      allTeamNoDateTasks.find(t => t.id === parentId);
+    return found ? found.name : null;
+  }, [task, allIndividualTasks, allIndividualNoDateTasks, allTeamTasks, allTeamNoDateTasks]);
+
+  const parentName = localParentName || fetchedParentName || task?.parent;
 
   useEffect(() => {
     if (!task) return;
@@ -465,6 +485,7 @@ export default function TaskDetailPanel() {
       setFetchedFields([]);
       setTaskDescription('');
       setTaskComments([]);
+      setFetchedParentName(null);
       return;
     }
 
@@ -479,6 +500,7 @@ export default function TaskDetailPanel() {
         setFetchedFields(fields);
         setTaskDescription(data.text_content || data.description || '');
         setTaskComments(data.comments || []);
+        setFetchedParentName(data.parentName || null);
         setLoadingFields(false);
       })
       .catch(() => {
@@ -531,7 +553,7 @@ export default function TaskDetailPanel() {
         {/* Task Type */}
         <div className="detail-type-row">
           <span className="detail-type-badge">● Task</span>
-          {task.parent && <span className="detail-subtask-label">Subtask of {task.parent}</span>}
+          {task.parent && <span className="detail-subtask-label">Subtask of {parentName}</span>}
         </div>
 
         {/* Title */}
